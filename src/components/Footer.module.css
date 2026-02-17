@@ -1,0 +1,109 @@
+.footer {
+    border-top: 1px solid var(--black-700);
+    padding: 60px 0 32px;
+    background: var(--black-950);
+    position: relative;
+}
+
+.footerGrid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 48px;
+    margin-bottom: 48px;
+}
+
+.footerBrand {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.footerLogo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 1.3rem;
+    color: var(--white);
+}
+
+.footerLogoIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--orange-500), var(--orange-600));
+    border-radius: var(--radius-sm);
+    color: var(--black-900);
+}
+
+.footerBrand p {
+    font-size: 0.9rem;
+    color: var(--black-300);
+    max-width: 280px;
+}
+
+.footerCol h4 {
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--white);
+    margin-bottom: 16px;
+}
+
+.footerCol ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.footerCol a {
+    font-size: 0.9rem;
+    color: var(--black-300);
+    transition: color var(--transition-fast);
+}
+
+.footerCol a:hover {
+    color: var(--orange-400);
+}
+
+.footerBottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 24px;
+    border-top: 1px solid var(--black-700);
+    font-size: 0.85rem;
+    color: var(--black-400);
+}
+
+.footerBottom a {
+    color: var(--orange-400);
+    transition: color var(--transition-fast);
+}
+
+.footerBottom a:hover {
+    color: var(--orange-300);
+}
+
+@media (max-width: 768px) {
+    .footerGrid {
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+    }
+
+    .footerBrand {
+        grid-column: 1 / -1;
+    }
+
+    .footerBottom {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
+    }
+}

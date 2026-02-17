@@ -1,0 +1,80 @@
+.features {
+    background: var(--black-950);
+    position: relative;
+}
+
+.features::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    height: 80px;
+    background: linear-gradient(to bottom, var(--orange-500), transparent);
+}
+
+.featuresGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+}
+
+.featureCard {
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+}
+
+.featureCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--orange-500), transparent);
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+}
+
+.featureCard:hover::before {
+    opacity: 1;
+}
+
+.featureIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--orange-glow);
+    color: var(--orange-400);
+    margin-bottom: 20px;
+}
+
+.featureCard h3 {
+    font-size: 1.15rem;
+    margin-bottom: 10px;
+    color: var(--white);
+}
+
+.featureCard p {
+    font-size: 0.9rem;
+    color: var(--black-300);
+    line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+    .featuresGrid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    .featuresGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

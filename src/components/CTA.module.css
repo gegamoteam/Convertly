@@ -1,0 +1,54 @@
+.cta {
+    position: relative;
+    text-align: center;
+    overflow: hidden;
+}
+
+.ctaBg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+.ctaGlow {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: var(--orange-500);
+    filter: blur(150px);
+    opacity: 0.08;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.ctaContent {
+    position: relative;
+    z-index: 1;
+}
+
+.ctaContent h2 {
+    margin-bottom: 16px;
+}
+
+.ctaContent p {
+    font-size: 1.1rem;
+    margin-bottom: 32px;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.ctaActions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+@media (max-width: 768px) {
+    .ctaActions {
+        flex-direction: column;
+    }
+}
