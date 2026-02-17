@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Shield } from "lucide-react";
+import { ArrowRight, Github } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import styles from "./CTA.module.css";
+
+const GITHUB_URL = "https://github.com/gegamoteam/Convertly";
 
 export function CTA() {
     const { t } = useI18n();
@@ -26,9 +28,10 @@ export function CTA() {
                     <Link href="/convert" className="btn btn-primary">
                         {t("cta.primary")} <ArrowRight size={16} />
                     </Link>
-                    <Link href="/privacy" className="btn btn-secondary">
-                        <Shield size={16} /> {t("cta.secondary")}
-                    </Link>
+                    <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className={styles.githubBtn}>
+                        <Github size={18} />
+                        {t("cta.secondary")}
+                    </a>
                 </div>
             </div>
         </section>

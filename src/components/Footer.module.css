@@ -45,6 +45,28 @@
     max-width: 280px;
 }
 
+.footerGithub {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    background: #24292e;
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid #444d56;
+    transition: all var(--transition-fast);
+    width: fit-content;
+}
+
+.footerGithub:hover {
+    background: #2f363d;
+    border-color: var(--orange-500);
+    color: var(--orange-400);
+}
+
 .footerCol h4 {
     font-family: var(--font-heading);
     font-size: 0.85rem;

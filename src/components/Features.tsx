@@ -2,7 +2,7 @@
 
 import {
     Shield, Zap, Layers, EyeOff,
-    CircleDollarSign, MonitorSmartphone, Lock, RefreshCw, HardDrive,
+    Code2, MonitorSmartphone, Lock, RefreshCw, HardDrive,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import styles from "./Features.module.css";
@@ -15,7 +15,7 @@ export function Features() {
         { icon: Zap, title: t("features.f2.title"), desc: t("features.f2.desc") },
         { icon: Layers, title: t("features.f3.title"), desc: t("features.f3.desc") },
         { icon: EyeOff, title: t("features.f4.title"), desc: t("features.f4.desc") },
-        { icon: CircleDollarSign, title: t("features.f5.title"), desc: t("features.f5.desc") },
+        { icon: Code2, title: t("features.f5.title"), desc: t("features.f5.desc") },
         { icon: MonitorSmartphone, title: t("features.f6.title"), desc: t("features.f6.desc") },
         { icon: Lock, title: t("features.f7.title"), desc: t("features.f7.desc") },
         { icon: RefreshCw, title: t("features.f8.title"), desc: t("features.f8.desc") },

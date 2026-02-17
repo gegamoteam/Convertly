@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Menu, X, Repeat, Globe } from "lucide-react";
+import { ArrowRight, Menu, X, Repeat, Globe, Github } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import styles from "./Navbar.module.css";
+
+const GITHUB_URL = "https://github.com/gegamoteam/Convertly";
 
 export function Navbar() {
     const [scrolled, setScrolled] = useState(false);
@@ -47,6 +49,9 @@ export function Navbar() {
                     </ul>
 
                     <div className={styles.navbarCta}>
+                        <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className={styles.langToggle} title="GitHub">
+                            <Github size={16} />
+                        </a>
                         <button onClick={toggleLang} className={styles.langToggle} title="Switch language">
                             <Globe size={16} /> {lang === "en" ? "ES" : "EN"}
                         </button>

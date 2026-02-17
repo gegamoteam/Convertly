@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Repeat } from "lucide-react";
+import { Repeat, Github } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import styles from "./Footer.module.css";
+
+const GITHUB_URL = "https://github.com/gegamoteam/Convertly";
 
 export function Footer() {
     const { t } = useI18n();
@@ -20,6 +22,9 @@ export function Footer() {
                             Convertly
                         </div>
                         <p>{t("footer.desc")}</p>
+                        <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className={styles.footerGithub}>
+                            <Github size={16} /> {t("footer.openSource")}
+                        </a>
                     </div>
 
                     <div className={styles.footerCol}>
@@ -28,6 +33,7 @@ export function Footer() {
                             <li><Link href="/convert">{t("footer.convertFiles")}</Link></li>
                             <li><Link href="/#features">{t("footer.features")}</Link></li>
                             <li><Link href="/#formats">{t("footer.formats")}</Link></li>
+                            <li><a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">{t("footer.github")}</a></li>
                         </ul>
                     </div>
 
