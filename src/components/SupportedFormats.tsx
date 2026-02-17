@@ -1,51 +1,32 @@
+"use client";
+
 import { Image, FileText, Music, Video, Database, Subtitles } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import styles from "./SupportedFormats.module.css";
 
-const categories = [
-    {
-        icon: Image,
-        name: "Images",
-        formats: ["PNG", "JPG", "WEBP", "GIF", "BMP", "ICO", "SVG", "TIFF", "AVIF", "HEIC"],
-    },
-    {
-        icon: Music,
-        name: "Audio",
-        formats: ["MP3", "WAV", "OGG", "FLAC", "AAC", "WMA", "M4A", "OPUS", "AIFF"],
-    },
-    {
-        icon: Video,
-        name: "Video",
-        formats: ["MP4", "WEBM", "AVI", "MOV", "MKV", "FLV", "WMV", "3GP", "MPEG"],
-    },
-    {
-        icon: FileText,
-        name: "Documents",
-        formats: ["TXT", "HTML", "MD", "RTF", "CSV", "LOG", "SRT", "VTT"],
-    },
-    {
-        icon: Database,
-        name: "Data",
-        formats: ["JSON", "CSV", "XML", "YAML", "TSV", "TOML", "INI", "NDJSON"],
-    },
-    {
-        icon: Subtitles,
-        name: "Subtitles",
-        formats: ["SRT", "VTT", "ASS", "SSA", "SUB"],
-    },
-];
-
 export function SupportedFormats() {
+    const { t } = useI18n();
+
+    const categories = [
+        { icon: Image, name: t("formats.images"), formats: ["PNG", "JPG", "WEBP", "GIF", "BMP", "ICO", "SVG", "TIFF", "AVIF", "HEIC"] },
+        { icon: Music, name: t("formats.audio"), formats: ["MP3", "WAV", "OGG", "FLAC", "AAC", "WMA", "M4A", "OPUS", "AIFF"] },
+        { icon: Video, name: t("formats.video"), formats: ["MP4", "WEBM", "AVI", "MOV", "MKV", "FLV", "WMV", "3GP", "MPEG"] },
+        { icon: FileText, name: t("formats.documents"), formats: ["TXT", "HTML", "MD", "RTF", "CSV", "LOG", "SRT", "VTT"] },
+        { icon: Database, name: t("formats.data"), formats: ["JSON", "CSV", "XML", "YAML", "TSV", "TOML", "INI", "NDJSON"] },
+        { icon: Subtitles, name: t("formats.subtitles"), formats: ["SRT", "VTT", "ASS", "SSA", "SUB"] },
+    ];
+
     return (
         <section className={`section ${styles.formats}`} id="formats">
             <div className="container">
                 <div className="section-header">
-                    <p className="section-label">Supported Formats</p>
+                    <p className="section-label">{t("formats.label")}</p>
                     <h2 className="section-title">
-                        Every format you need,{" "}
-                        <span className="gradient-text">all in one place.</span>
+                        {t("formats.title")}
+                        <span className="gradient-text">{t("formats.titleGradient")}</span>
                     </h2>
                     <p className="section-desc">
-                        100+ formats across images, audio, video, data, subtitles, and more — all converted locally.
+                        {t("formats.desc")}
                     </p>
                 </div>
 

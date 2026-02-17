@@ -1,76 +1,38 @@
+"use client";
+
 import {
-    Shield,
-    Zap,
-    Layers,
-    EyeOff,
-    CircleDollarSign,
-    MonitorSmartphone,
-    Lock,
-    RefreshCw,
-    HardDrive,
+    Shield, Zap, Layers, EyeOff,
+    CircleDollarSign, MonitorSmartphone, Lock, RefreshCw, HardDrive,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import styles from "./Features.module.css";
 
-const features = [
-    {
-        icon: Shield,
-        title: "100% Local Processing",
-        desc: "Every conversion happens in your browser. Your files never touch a server.",
-    },
-    {
-        icon: Zap,
-        title: "Lightning Fast",
-        desc: "No upload/download delays. Conversion starts the moment you drop your file.",
-    },
-    {
-        icon: Layers,
-        title: "50+ Formats",
-        desc: "Images, documents, audio, video, and data files. All the formats you need.",
-    },
-    {
-        icon: EyeOff,
-        title: "Zero Tracking",
-        desc: "No analytics, no cookies, no data collection. Your privacy is absolute.",
-    },
-    {
-        icon: CircleDollarSign,
-        title: "Completely Free",
-        desc: "No subscriptions, no limits, no hidden fees. Free forever.",
-    },
-    {
-        icon: MonitorSmartphone,
-        title: "Works Everywhere",
-        desc: "Desktop, tablet, or phone. Works on any modern browser, any device.",
-    },
-    {
-        icon: Lock,
-        title: "End-to-End Secure",
-        desc: "Files stay on your device. Nothing is stored, transmitted, or logged.",
-    },
-    {
-        icon: RefreshCw,
-        title: "Batch Conversion",
-        desc: "Convert multiple files at once. Drag, drop, and download in seconds.",
-    },
-    {
-        icon: HardDrive,
-        title: "No Installation",
-        desc: "Nothing to download or install. Open the page and start converting.",
-    },
-];
-
 export function Features() {
+    const { t } = useI18n();
+
+    const features = [
+        { icon: Shield, title: t("features.f1.title"), desc: t("features.f1.desc") },
+        { icon: Zap, title: t("features.f2.title"), desc: t("features.f2.desc") },
+        { icon: Layers, title: t("features.f3.title"), desc: t("features.f3.desc") },
+        { icon: EyeOff, title: t("features.f4.title"), desc: t("features.f4.desc") },
+        { icon: CircleDollarSign, title: t("features.f5.title"), desc: t("features.f5.desc") },
+        { icon: MonitorSmartphone, title: t("features.f6.title"), desc: t("features.f6.desc") },
+        { icon: Lock, title: t("features.f7.title"), desc: t("features.f7.desc") },
+        { icon: RefreshCw, title: t("features.f8.title"), desc: t("features.f8.desc") },
+        { icon: HardDrive, title: t("features.f9.title"), desc: t("features.f9.desc") },
+    ];
+
     return (
         <section className={`section ${styles.features}`} id="features">
             <div className="container">
                 <div className="section-header">
-                    <p className="section-label">Features</p>
+                    <p className="section-label">{t("features.label")}</p>
                     <h2 className="section-title">
-                        Privacy-first conversion,{" "}
-                        <span className="gradient-text">no exceptions.</span>
+                        {t("features.title")}
+                        <span className="gradient-text">{t("features.titleGradient")}</span>
                     </h2>
                     <p className="section-desc">
-                        Built from the ground up for security. Your files never leave your device.
+                        {t("features.desc")}
                     </p>
                 </div>
 

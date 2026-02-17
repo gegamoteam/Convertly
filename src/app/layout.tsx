@@ -3,6 +3,8 @@ import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { ToastProvider } from "@/components/Toast";
+import { I18nProvider } from "@/lib/i18n";
+import { LanguageSelector } from "@/components/LanguageSelector";
 
 export const metadata: Metadata = {
   title: {
@@ -23,6 +25,8 @@ export const metadata: Metadata = {
     "no upload converter",
     "batch file converter",
     "multi file converter",
+    "convertidor de archivos",
+    "conversor gratis",
   ],
   authors: [{ name: "Gegamo Team" }],
   creator: "Gegamo Team",
@@ -55,11 +59,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ToastProvider>
-          <Navbar />
-          <main>{children}</main>
-          <Footer />
-        </ToastProvider>
+        <I18nProvider>
+          <ToastProvider>
+            <LanguageSelector />
+            <Navbar />
+            <main>{children}</main>
+            <Footer />
+          </ToastProvider>
+        </I18nProvider>
       </body>
     </html>
   );

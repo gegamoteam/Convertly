@@ -1,39 +1,29 @@
+"use client";
+
 import { Upload, RefreshCw, Download } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import styles from "./HowItWorks.module.css";
 
-const steps = [
-    {
-        num: "1",
-        icon: Upload,
-        title: "Drop Your File",
-        desc: "Drag and drop any supported file or click to browse. No size limits, no sign-ups.",
-    },
-    {
-        num: "2",
-        icon: RefreshCw,
-        title: "Choose Format",
-        desc: "Pick your target format. Conversion happens instantly, right in your browser.",
-    },
-    {
-        num: "3",
-        icon: Download,
-        title: "Download Result",
-        desc: "Your converted file is ready. Download it directly — nothing was uploaded anywhere.",
-    },
-];
-
 export function HowItWorks() {
+    const { t } = useI18n();
+
+    const steps = [
+        { num: "1", icon: Upload, title: t("how.s1.title"), desc: t("how.s1.desc") },
+        { num: "2", icon: RefreshCw, title: t("how.s2.title"), desc: t("how.s2.desc") },
+        { num: "3", icon: Download, title: t("how.s3.title"), desc: t("how.s3.desc") },
+    ];
+
     return (
         <section className={`section ${styles.howItWorks}`} id="how-it-works">
             <div className="container">
                 <div className="section-header">
-                    <p className="section-label">How It Works</p>
+                    <p className="section-label">{t("how.label")}</p>
                     <h2 className="section-title">
-                        Three steps,{" "}
-                        <span className="gradient-text">zero compromises.</span>
+                        {t("how.title")}
+                        <span className="gradient-text">{t("how.titleGradient")}</span>
                     </h2>
                     <p className="section-desc">
-                        No accounts, no uploads, no waiting. Just fast, private conversion.
+                        {t("how.desc")}
                     </p>
                 </div>
 

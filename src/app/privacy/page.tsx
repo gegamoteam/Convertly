@@ -1,13 +1,16 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useI18n } from "@/lib/i18n";
 import styles from "../legal.module.css";
 
-export const metadata: Metadata = {
-    title: "Privacy Policy",
-    description:
-        "Convertly Privacy Policy — We process nothing on our servers. All file conversions happen locally in your browser. No data is collected, stored, or transmitted.",
-};
-
 export default function PrivacyPage() {
+    const { lang } = useI18n();
+
+    if (lang === "es") return <PrivacyES />;
+    return <PrivacyEN />;
+}
+
+function PrivacyEN() {
     return (
         <div className={styles.legalPage}>
             <div className={`container ${styles.legalContent}`}>
@@ -57,7 +60,7 @@ export default function PrivacyPage() {
                 <h2>Local Storage</h2>
                 <p>
                     Convertly may use your browser&apos;s local storage to save preferences such as
-                    theme settings. This data never leaves your device and can be cleared at
+                    language and theme settings. This data never leaves your device and can be cleared at
                     any time through your browser settings.
                 </p>
 
@@ -87,6 +90,97 @@ export default function PrivacyPage() {
                     If you have questions about this privacy policy, contact the{" "}
                     <a href="https://gegamo.xyz" target="_blank" rel="noopener noreferrer">
                         Gegamo Team
+                    </a>.
+                </p>
+            </div>
+        </div>
+    );
+}
+
+function PrivacyES() {
+    return (
+        <div className={styles.legalPage}>
+            <div className={`container ${styles.legalContent}`}>
+                <p className="section-label">Legal</p>
+                <h1>Política de Privacidad</h1>
+                <p className={styles.legalMeta}>Última actualización: 16 de febrero de 2026</p>
+
+                <div className={styles.legalHighlight}>
+                    <p>
+                        Convertly procesa todos los archivos localmente en tu navegador. No subimos,
+                        almacenamos ni transmitimos tus archivos a ningún servidor.
+                    </p>
+                </div>
+
+                <h2>Descripción General</h2>
+                <p>
+                    Convertly está construido por el <strong>Equipo Gegamo</strong> con un principio
+                    fundamental: tus datos son tuyos. Creamos Convertly para ser una herramienta de
+                    conversión de archivos que respeta tu privacidad por diseño, no como una
+                    consideración secundaria.
+                </p>
+
+                <h2>Recolección de Datos</h2>
+                <p>
+                    <strong>No recolectamos ningún dato.</strong> Específicamente:
+                </p>
+                <ul>
+                    <li>No subimos tus archivos a ningún servidor</li>
+                    <li>No usamos cookies ni scripts de rastreo</li>
+                    <li>No usamos servicios de analítica</li>
+                    <li>No almacenamos información personal</li>
+                    <li>No registramos tu dirección IP ni información del navegador</li>
+                    <li>No usamos publicidad de terceros</li>
+                </ul>
+
+                <h2>Cómo Funciona la Conversión de Archivos</h2>
+                <p>
+                    Todas las conversiones de archivos se realizan completamente dentro de tu
+                    navegador web usando JavaScript del lado del cliente. Cuando seleccionas un
+                    archivo para convertir:
+                </p>
+                <ul>
+                    <li>El archivo es leído directamente por tu navegador</li>
+                    <li>El procesamiento de conversión ocurre usando la potencia de cómputo de tu dispositivo</li>
+                    <li>El archivo convertido se pone a disposición para descargar desde la memoria de tu navegador</li>
+                    <li>En ningún momento el archivo sale de tu dispositivo</li>
+                </ul>
+
+                <h2>Almacenamiento Local</h2>
+                <p>
+                    Convertly puede usar el almacenamiento local de tu navegador para guardar
+                    preferencias como el idioma y la configuración del tema. Estos datos nunca
+                    salen de tu dispositivo y pueden ser eliminados en cualquier momento a
+                    través de la configuración de tu navegador.
+                </p>
+
+                <h2>Servicios de Terceros</h2>
+                <p>
+                    Convertly no se integra con ningún servicio de terceros que pueda acceder
+                    a tus datos. Usamos Google Fonts para la tipografía, que se carga
+                    directamente desde la CDN de Google. La política de privacidad de Google
+                    aplica a este servicio específico.
+                </p>
+
+                <h2>Código Abierto</h2>
+                <p>
+                    Nuestro compromiso con la privacidad está respaldado por la transparencia.
+                    Puedes inspeccionar nuestro código fuente para verificar que no se transmite
+                    ningún dato desde tu dispositivo.
+                </p>
+
+                <h2>Cambios en Esta Política</h2>
+                <p>
+                    Si realizamos cambios en esta política de privacidad, actualizaremos esta
+                    página con la nueva política y la fecha de la actualización. Nuestro compromiso
+                    fundamental con el procesamiento exclusivamente local no cambiará.
+                </p>
+
+                <h2>Contacto</h2>
+                <p>
+                    Si tienes preguntas sobre esta política de privacidad, contacta al{" "}
+                    <a href="https://gegamo.xyz" target="_blank" rel="noopener noreferrer">
+                        Equipo Gegamo
                     </a>.
                 </p>
             </div>

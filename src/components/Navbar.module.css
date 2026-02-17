@@ -93,6 +93,44 @@
     gap: 12px;
 }
 
+.langToggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--black-800);
+    border: 1px solid var(--black-600);
+    color: var(--black-200);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-body);
+}
+
+.langToggle:hover {
+    border-color: var(--orange-500);
+    color: var(--orange-400);
+}
+
+.langToggleMobile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--black-700);
+    color: var(--orange-400);
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--font-body);
+    width: 100%;
+    text-align: left;
+}
+
 .navbarCta .btn {
     padding: 10px 24px;
     font-size: 0.85rem;

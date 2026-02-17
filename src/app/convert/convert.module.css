@@ -11,13 +11,288 @@
     margin: 0 auto;
 }
 
-/* ── Format Picker ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODE SWITCH — Convert / Compress
+   ═══════════════════════════════════════════════════════════════════════════ */
+.modeSwitch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: var(--black-900);
+    border: 1px solid var(--black-600);
+    border-radius: var(--radius-lg);
+    padding: 6px;
+}
+
+.modeSwitchBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-radius: var(--radius-md);
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--black-300);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    position: relative;
+}
+
+.modeSwitchBtn span {
+    font-size: 0.95rem;
+}
+
+.modeSwitchBtn small {
+    font-size: 0.7rem;
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+.modeSwitchBtn:hover {
+    color: var(--white);
+    background: var(--black-800);
+}
+
+.modeSwitchBtnActive {
+    background: var(--black-800) !important;
+    border-color: var(--black-500);
+    color: var(--orange-400) !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.modeSwitchBtnCompress.modeSwitchBtnActive {
+    color: var(--green-400) !important;
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+.newBadge {
+    background: linear-gradient(135deg, var(--green-500), #10b981) !important;
+    color: var(--black-900) !important;
+    font-size: 0.6rem !important;
+    font-weight: 700 !important;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 1 !important;
+    animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 12px 4px rgba(34, 197, 94, 0.15);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPRESS HERO SECTION
+   ═══════════════════════════════════════════════════════════════════════════ */
+.compressHero {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.04), rgba(16, 185, 129, 0.02));
+    border: 1px solid rgba(34, 197, 94, 0.15);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.compressHeroInner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.compressHeroIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-lg);
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--green-400);
+    flex-shrink: 0;
+}
+
+.compressHeroText h3 {
+    font-size: 1rem;
+    color: var(--white);
+    margin-bottom: 4px;
+}
+
+.compressHeroText p {
+    font-size: 0.85rem;
+    color: var(--black-300);
+}
+
+.compressLevels {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.compressLevel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 18px 12px;
+    border-radius: var(--radius-md);
+    background: var(--black-800);
+    border: 1px solid var(--black-600);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    font-family: var(--font-body);
+    text-align: center;
+}
+
+.compressLevel:hover {
+    border-color: var(--black-400);
+    background: var(--black-700);
+}
+
+.compressLevelActive {
+    border-color: var(--green-500) !important;
+    background: rgba(34, 197, 94, 0.06) !important;
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.08);
+}
+
+.compressLevelTitle {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--white);
+}
+
+.compressLevelActive .compressLevelTitle {
+    color: var(--green-400);
+}
+
+.compressLevelDesc {
+    font-size: 0.72rem;
+    color: var(--black-300);
+}
+
+.compressLevelPercent {
+    font-size: 0.7rem;
+    color: var(--black-400);
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.compressLevelActive .compressLevelPercent {
+    color: var(--green-400);
+    opacity: 0.7;
+}
+
+.compressSavings {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(34, 197, 94, 0.06);
+    border: 1px solid rgba(34, 197, 94, 0.15);
+    border-radius: var(--radius-md);
+    color: var(--green-400);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DROPZONE
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dropzone {
+    border: 2px dashed var(--black-500);
+    border-radius: var(--radius-xl);
+    padding: 64px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    position: relative;
+    overflow: hidden;
+    background: var(--black-800);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.dropzone:hover,
+.dragging {
+    border-color: var(--orange-500);
+    background: rgba(255, 107, 0, 0.03);
+    box-shadow: 0 0 60px var(--orange-glow);
+}
+
+.dropzoneCompact {
+    padding: 24px 32px;
+    flex-direction: row;
+    text-align: left;
+}
+
+.dropzoneCompact h3 {
+    font-size: 0.95rem;
+}
+
+.dropzoneCompact p {
+    font-size: 0.8rem;
+}
+
+.dropzoneIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-lg);
+    background: var(--orange-glow);
+    color: var(--orange-400);
+    flex-shrink: 0;
+}
+
+.dropzoneCompact .dropzoneIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+}
+
+.dropzone h3 {
+    font-size: 1.2rem;
+    color: var(--white);
+}
+
+.dropzone p {
+    font-size: 0.9rem;
+    color: var(--black-300);
+}
+
+.dropzoneBrowse {
+    color: var(--orange-400);
+    font-weight: 600;
+}
+
+.dropzone input[type="file"] {
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORMAT PICKER (below dropzone)
+   ═══════════════════════════════════════════════════════════════════════════ */
 .formatPicker {
     background: var(--black-800);
     border: 1px solid var(--black-600);
     border-radius: var(--radius-lg);
     padding: 24px;
-    transition: all var(--transition-normal);
 }
 
 .formatPickerHeader {
@@ -42,6 +317,7 @@
     font-size: 0.8rem;
     cursor: pointer;
     transition: color var(--transition-fast);
+    font-family: var(--font-body);
 }
 
 .formatPickerClear:hover {
@@ -54,7 +330,6 @@
     margin-bottom: 16px;
     overflow-x: auto;
     scrollbar-width: none;
-    -ms-overflow-style: none;
     padding-bottom: 4px;
 }
 
@@ -133,82 +408,9 @@
     color: var(--orange-400);
 }
 
-/* ── Dropzone ── */
-.dropzone {
-    border: 2px dashed var(--black-500);
-    border-radius: var(--radius-xl);
-    padding: 64px 32px;
-    text-align: center;
-    cursor: pointer;
-    transition: all var(--transition-normal);
-    position: relative;
-    overflow: hidden;
-    background: var(--black-800);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-}
-
-.dropzone:hover,
-.dragging {
-    border-color: var(--orange-500);
-    background: rgba(255, 107, 0, 0.03);
-    box-shadow: 0 0 60px var(--orange-glow);
-}
-
-.dropzoneCompact {
-    padding: 24px 32px;
-    flex-direction: row;
-    text-align: left;
-}
-
-.dropzoneCompact h3 {
-    font-size: 0.95rem;
-}
-
-.dropzoneCompact p {
-    font-size: 0.8rem;
-}
-
-.dropzoneIcon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    height: 64px;
-    border-radius: var(--radius-lg);
-    background: var(--orange-glow);
-    color: var(--orange-400);
-    flex-shrink: 0;
-}
-
-.dropzoneCompact .dropzoneIcon {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-md);
-}
-
-.dropzone h3 {
-    font-size: 1.2rem;
-    color: var(--white);
-}
-
-.dropzone p {
-    font-size: 0.9rem;
-    color: var(--black-300);
-}
-
-.dropzoneBrowse {
-    color: var(--orange-400);
-    font-weight: 600;
-}
-
-.dropzone input[type="file"] {
-    display: none;
-}
-
-/* ── Toolbar ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOOLBAR
+   ═══════════════════════════════════════════════════════════════════════════ */
 .toolbar {
     display: flex;
     align-items: center;
@@ -245,14 +447,15 @@
     flex-wrap: wrap;
 }
 
-/* ── File List ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   FILE CARDS
+   ═══════════════════════════════════════════════════════════════════════════ */
 .fileList {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-/* ── File Card ── */
 .fileCard {
     background: var(--black-800);
     border: 1px solid var(--black-600);
@@ -414,7 +617,6 @@
     color: var(--red-400);
 }
 
-/* ── File Card Sections ── */
 .fileCardErrorMsg {
     display: flex;
     align-items: center;
@@ -425,21 +627,13 @@
     border-top: 1px solid var(--black-700);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTINGS PANEL
+   ═══════════════════════════════════════════════════════════════════════════ */
 .settingsPanel {
     padding: 16px;
     border-top: 1px solid var(--black-700);
     background: var(--black-900);
-}
-
-.settingsRow {
-    display: flex;
-    gap: 24px;
-    flex-wrap: wrap;
-}
-
-.settingsGroup {
-    flex: 1;
-    min-width: 180px;
 }
 
 .settingsPanel label {
@@ -491,53 +685,9 @@
     color: var(--black-400);
 }
 
-/* ── Compress Toggle ── */
-.compressToggle {
-    display: flex !important;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    user-select: none;
-}
-
-.compressToggle input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--orange-500);
-    cursor: pointer;
-}
-
-.compressionOptions {
-    display: flex;
-    gap: 6px;
-    margin-top: 10px;
-}
-
-.compressionBtn {
-    padding: 5px 14px;
-    border-radius: var(--radius-sm);
-    background: var(--black-700);
-    border: 1px solid var(--black-600);
-    color: var(--black-200);
-    font-size: 0.75rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    font-family: var(--font-body);
-}
-
-.compressionBtn:hover {
-    border-color: var(--black-400);
-    color: var(--white);
-}
-
-.compressionBtnActive {
-    background: var(--orange-glow);
-    border-color: var(--orange-500);
-    color: var(--orange-400);
-}
-
-/* ── Preview Panel ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   PREVIEW PANEL
+   ═══════════════════════════════════════════════════════════════════════════ */
 .previewPanel {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -572,7 +722,9 @@
     letter-spacing: 0.05em;
 }
 
-/* ── Responsive ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
     .converterPage {
         padding-top: 80px;
@@ -620,8 +772,19 @@
         padding: 16px;
     }
 
-    .settingsRow {
-        flex-direction: column;
-        gap: 16px;
+    .compressLevels {
+        grid-template-columns: 1fr;
+    }
+
+    .compressHero {
+        padding: 20px;
+    }
+
+    .modeSwitch {
+        grid-template-columns: 1fr;
+    }
+
+    .modeSwitchBtn {
+        padding: 12px 16px;
     }
 }
