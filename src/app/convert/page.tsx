@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import {
     Upload, FileText, Image as ImageIcon, Music, Video, Database, X,
     ArrowRight, CheckCircle, Download, RefreshCw, AlertTriangle,
@@ -10,6 +10,7 @@ import {
 import { convertFile, getAvailableConversions, getFormatInfo, FORMATS, CONVERSION_MAP } from "@/lib/converter";
 import { useToast } from "@/components/Toast";
 import { useI18n } from "@/lib/i18n";
+import { consumePendingFiles } from "@/lib/fileStore";
 import styles from "./convert.module.css";
 
 function formatBytes(bytes: number): string {
@@ -109,6 +110,16 @@ export default function ConvertPage() {
         e.preventDefault(); setDragging(false);
         if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
     }, [addFiles]);
+
+    // Pick up files from Hero dropzone
+    useEffect(() => {
+        const { files: pending, mode: pendingMode } = consumePendingFiles();
+        if (pending.length > 0) {
+            setMode(pendingMode);
+            addFiles(pending);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const updateFile = useCallback((id: string, update: Partial<FileItem>) => {
         setFiles(prev => prev.map(f => f.id === id ? { ...f, ...update } : f));
