@@ -41,11 +41,11 @@ export function Navbar() {
                     </Link>
 
                     <ul className={styles.navbarLinks}>
+                        <li><Link href="/convert">{t("nav.convert")}</Link></li>
+                        <li><Link href="/download">{t("nav.download")}</Link></li>
                         <li><Link href="/#features">{t("nav.features")}</Link></li>
                         <li><Link href="/#formats">{t("nav.formats")}</Link></li>
-                        <li><Link href="/#how-it-works">{t("nav.howItWorks")}</Link></li>
                         <li><Link href="/#faq">{t("nav.faq")}</Link></li>
-                        <li><Link href="/privacy">{t("nav.privacy")}</Link></li>
                     </ul>
 
                     <div className={styles.navbarCta}>
@@ -76,12 +76,12 @@ export function Navbar() {
                 onClick={() => setMobileOpen(false)}
             />
             <div className={`${styles.navbarMobileMenu} ${mobileOpen ? styles.open : ""}`}>
+                <Link href="/convert" onClick={() => setMobileOpen(false)}>{t("nav.convert")}</Link>
+                <Link href="/download" onClick={() => setMobileOpen(false)}>{t("nav.download")}</Link>
                 <Link href="/#features" onClick={() => setMobileOpen(false)}>{t("nav.features")}</Link>
                 <Link href="/#formats" onClick={() => setMobileOpen(false)}>{t("nav.formats")}</Link>
-                <Link href="/#how-it-works" onClick={() => setMobileOpen(false)}>{t("nav.howItWorks")}</Link>
                 <Link href="/#faq" onClick={() => setMobileOpen(false)}>{t("nav.faq")}</Link>
                 <Link href="/privacy" onClick={() => setMobileOpen(false)}>{t("nav.privacy")}</Link>
-                <Link href="/terms" onClick={() => setMobileOpen(false)}>Términos</Link>
                 <button onClick={() => { toggleLang(); setMobileOpen(false); }} className={styles.langToggleMobile}>
                     <Globe size={16} /> {lang === "en" ? "Español" : "English"}
                 </button>

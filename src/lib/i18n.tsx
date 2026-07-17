@@ -26,6 +26,8 @@ const translations: Record<Lang, Record<string, string>> = {
         "nav.howItWorks": "How It Works",
         "nav.faq": "FAQ",
         "nav.privacy": "Privacy",
+        "nav.convert": "Convert",
+        "nav.download": "Download",
         "nav.start": "Start Converting",
 
         // ── Hero ──
@@ -219,6 +221,8 @@ const translations: Record<Lang, Record<string, string>> = {
         "nav.howItWorks": "Cómo Funciona",
         "nav.faq": "Preguntas",
         "nav.privacy": "Privacidad",
+        "nav.convert": "Convertir",
+        "nav.download": "Descargar",
         "nav.start": "Empezar a Convertir",
 
         // ── Hero ──

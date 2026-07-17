@@ -31,8 +31,8 @@ export function Footer() {
                         <h4>{t("footer.product")}</h4>
                         <ul>
                             <li><Link href="/convert">{t("footer.convertFiles")}</Link></li>
+                            <li><Link href="/download">Media Download</Link></li>
                             <li><Link href="/#features">{t("footer.features")}</Link></li>
-                            <li><Link href="/#formats">{t("footer.formats")}</Link></li>
                             <li><a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">{t("footer.github")}</a></li>
                         </ul>
                     </div>

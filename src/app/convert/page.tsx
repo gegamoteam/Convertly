@@ -136,21 +136,15 @@ export default function ConvertPage() {
 
     const convertSingleFile = useCallback(async (item: FileItem) => {
         if (!item.targetFormat || item.status === "converting" || item.status === "done") return;
-        updateFile(item.id, { status: "converting", progress: 10, error: null });
+        updateFile(item.id, { status: "converting", progress: 1, error: null });
         try {
-            const interval = setInterval(() => {
-                setFiles(prev => prev.map(f => {
-                    if (f.id !== item.id || f.status !== "converting") return f;
-                    const remaining = 98 - f.progress;
-                    const increment = Math.max(0.3, remaining * 0.06);
-                    return { ...f, progress: Math.min(f.progress + increment, 98) };
-                }));
-            }, 150);
             const blob = await convertFile(item.file, item.targetFormat, item.quality, {
                 compress: mode === "compress",
                 compressionLevel: compressionLevel,
+                onProgress: (pct) => {
+                    updateFile(item.id, { progress: Math.min(99, Math.max(1, Math.round(pct))) });
+                },
             });
-            clearInterval(interval);
             const isImgResult = FORMATS[item.targetFormat]?.category === "image";
             updateFile(item.id, {
                 status: "done", progress: 100, result: blob,

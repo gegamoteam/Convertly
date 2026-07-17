@@ -485,10 +485,23 @@
     position: absolute;
     top: 0;
     left: 0;
+    bottom: 0;
     height: 100%;
-    background: linear-gradient(90deg, rgba(255, 107, 0, 0.05), rgba(255, 107, 0, 0.08));
-    transition: width 0.3s ease;
+    background: linear-gradient(90deg, rgba(255, 107, 0, 0.12), rgba(255, 107, 0, 0.22));
+    transition: width 0.2s linear;
     z-index: 0;
+    pointer-events: none;
+}
+
+.fileCardProgress::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--orange-400);
+    box-shadow: 0 0 12px var(--orange-glow-strong);
 }
 
 .fileCardMain {

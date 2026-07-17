@@ -1,4 +1,4 @@
-import { convertMedia, compressMedia, isFFmpegFormat } from "./ffmpeg-helper";
+import { convertMedia, compressMedia, isFFmpegFormat, type ProgressCallback } from "./ffmpeg-helper";
 
 export type ConversionCategory = "image" | "document" | "data" | "audio" | "video" | "subtitle" | "font" | "code" | "archive" | "ebook";
 
@@ -554,41 +554,57 @@ export async function convertFile(
     file: File,
     targetFormat: string,
     quality: number = 92,
-    options?: { compress?: boolean; compressionLevel?: "light" | "medium" | "heavy"; maxDim?: number }
+    options?: {
+        compress?: boolean;
+        compressionLevel?: "light" | "medium" | "heavy";
+        maxDim?: number;
+        onProgress?: ProgressCallback;
+    }
 ): Promise<Blob> {
     const ext = getExt(file.name);
     const srcInfo = FORMATS[ext];
     if (!srcInfo) throw new Error(`Unsupported format: .${ext}`);
 
+    const onProgress = options?.onProgress;
+
     // ── Compression (same format) ────────────────────────────────────────
     if (options?.compress && targetFormat === ext) {
         if (srcInfo.category === "image" && CANVAS_INPUTS.includes(ext)) {
+            onProgress?.(30, "Compressing image…");
             const compressQ = { light: 75, medium: 50, heavy: 25 }[options.compressionLevel || "medium"];
             const maxDim = { light: undefined, medium: 1920, heavy: 1280 }[options.compressionLevel || "medium"];
-            return convertImageCanvas(file, ext === "svg" ? "png" : ext, compressQ, maxDim);
+            const result = await convertImageCanvas(file, ext === "svg" ? "png" : ext, compressQ, maxDim);
+            onProgress?.(100, "Done");
+            return result;
         }
         if (isFFmpegFormat(ext)) {
-            return compressMedia(file, ext, options.compressionLevel || "medium");
+            return compressMedia(file, ext, options.compressionLevel || "medium", onProgress);
         }
     }
 
     // ── Image conversion (Canvas) ────────────────────────────────────────
     if (srcInfo.category === "image" && CANVAS_INPUTS.includes(ext) && CANVAS_OUTPUTS.includes(targetFormat)) {
-        return convertImageCanvas(file, targetFormat, quality, options?.maxDim);
+        onProgress?.(40, "Converting image…");
+        const result = await convertImageCanvas(file, targetFormat, quality, options?.maxDim);
+        onProgress?.(100, "Done");
+        return result;
     }
 
     // ── HEIC/HEIF → Image (via FFmpeg) ───────────────────────────────────
     if ((ext === "heic" || ext === "heif") && CANVAS_OUTPUTS.includes(targetFormat)) {
-        return convertMedia(file, ext, targetFormat);
+        return convertMedia(file, ext, targetFormat, { onProgress });
     }
 
     // ── Audio / Video (FFmpeg) ───────────────────────────────────────────
     if (isFFmpegFormat(ext) && (FFMPEG_AUDIO.includes(targetFormat) || FFMPEG_VIDEO.includes(targetFormat))) {
-        return convertMedia(file, ext, targetFormat, options?.compress ? {
-            compress: true,
-            audioBitrate: { light: "192k", medium: "128k", heavy: "64k" }[options.compressionLevel || "medium"],
-            videoBitrate: { light: "2000k", medium: "1000k", heavy: "500k" }[options.compressionLevel || "medium"],
-        } : undefined);
+        return convertMedia(file, ext, targetFormat, {
+            ...(options?.compress ? {
+                compress: true as const,
+                audioBitrate: { light: "192k", medium: "128k", heavy: "64k" }[options.compressionLevel || "medium"],
+                videoBitrate: { light: "2000k", medium: "1000k", heavy: "500k" }[options.compressionLevel || "medium"],
+            } : {}),
+            onProgress,
+        });
     }
 
     // ── Subtitle conversion ──────────────────────────────────────────────

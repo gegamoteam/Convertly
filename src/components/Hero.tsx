@@ -75,6 +75,9 @@ export function Hero() {
                         <a href="/convert" className="btn btn-primary">
                             {t("hero.cta")} <ArrowRight size={16} />
                         </a>
+                        <a href="/download" className="btn btn-secondary">
+                            Media Download
+                        </a>
                         <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className={styles.githubBtn}>
                             <Github size={18} />
                             {t("hero.github")}
