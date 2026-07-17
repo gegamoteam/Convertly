@@ -6,6 +6,72 @@ import { randomBytes } from "crypto";
 import { pipeline } from "stream/promises";
 import type { Readable } from "stream";
 
+// Avoid WEB client — YouTube bot-checks datacenter IPs (Vercel) hard on WEB.
+// IOS / ANDROID / TV / WEB_EMBEDDED bypass most "Sign in to confirm you're not a bot" walls.
+const YT_OPTS: ytdl.getInfoOptions = {
+    playerClients: ["ANDROID", "IOS", "TV", "WEB_EMBEDDED"],
+    requestOptions: {
+        headers: {
+            "User-Agent":
+                "com.google.android.youtube/19.29.37 (Linux; U; Android 14) gzip",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    },
+};
+
+let agent: ReturnType<typeof ytdl.createAgent> | null = null;
+
+function getAgent() {
+    if (agent) return agent;
+    // Optional: set YOUTUBE_COOKIES to a JSON array of cookies (EditThisCookie export)
+    // if Vercel IPs still get bot-checked for some videos.
+    const raw = process.env.YOUTUBE_COOKIES?.trim();
+    try {
+        if (raw) {
+            const cookies = JSON.parse(raw) as Parameters<typeof ytdl.createAgent>[0];
+            agent = ytdl.createAgent(cookies);
+        } else {
+            agent = ytdl.createAgent();
+        }
+    } catch {
+        agent = ytdl.createAgent();
+    }
+    return agent;
+}
+
+function ytOptions(extra?: ytdl.getInfoOptions): ytdl.getInfoOptions {
+    return {
+        ...YT_OPTS,
+        ...extra,
+        agent: getAgent(),
+        playerClients: extra?.playerClients || YT_OPTS.playerClients,
+        requestOptions: {
+            ...YT_OPTS.requestOptions,
+            ...extra?.requestOptions,
+            headers: {
+                ...(YT_OPTS.requestOptions as { headers?: Record<string, string> })?.headers,
+                ...(extra?.requestOptions as { headers?: Record<string, string> })?.headers,
+            },
+        },
+    };
+}
+
+function humanizeYtError(err: unknown): Error {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/sign in to confirm|not a bot|bot/i.test(msg)) {
+        return new Error(
+            "YouTube is blocking this server IP (bot check). Try another video, or set YOUTUBE_COOKIES on the host."
+        );
+    }
+    if (/status code 4\d\d|status: 4\d\d|HTTP Error 4/i.test(msg)) {
+        return new Error("YouTube refused the request. The video may be private, age-restricted, or region-locked.");
+    }
+    if (/unavailable|private|removed/i.test(msg)) {
+        return new Error("This video is unavailable (private, removed, or region-locked).");
+    }
+    return err instanceof Error ? err : new Error(msg);
+}
+
 export type MediaSource = "youtube" | "spotify" | "unknown";
 export type DownloadFormat = "mp3" | "mp4" | "m4a" | "webm" | "wav";
 
@@ -286,19 +352,45 @@ export async function getMediaInfo(rawUrl: string): Promise<MediaInfo> {
         throw new Error("Invalid YouTube URL");
     }
 
-    const info = await ytdl.getBasicInfo(ytUrl);
-    const d = info.videoDetails;
+    try {
+        const info = await ytdl.getBasicInfo(ytUrl, ytOptions());
+        const d = info.videoDetails;
 
-    return {
-        source: "youtube",
-        id: d.videoId,
-        title: d.title,
-        artist: d.author?.name,
-        duration: Number(d.lengthSeconds) || undefined,
-        thumbnail: d.thumbnails?.at(-1)?.url || d.thumbnails?.[0]?.url,
-        url: ytUrl,
-        downloadUrl: ytUrl,
-    };
+        return {
+            source: "youtube",
+            id: d.videoId,
+            title: d.title,
+            artist: d.author?.name,
+            duration: Number(d.lengthSeconds) || undefined,
+            thumbnail: d.thumbnails?.at(-1)?.url || d.thumbnails?.[0]?.url,
+            url: ytUrl,
+            downloadUrl: ytUrl,
+        };
+    } catch (err) {
+        // Fallback: oEmbed (no stream, but good preview metadata)
+        try {
+            const o = await fetch(
+                `https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`,
+                { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(10000) }
+            );
+            if (o.ok) {
+                const data = await o.json() as { title?: string; author_name?: string; thumbnail_url?: string };
+                const id = ytdl.getURLVideoID(ytUrl);
+                return {
+                    source: "youtube",
+                    id,
+                    title: data.title || "YouTube video",
+                    artist: data.author_name,
+                    thumbnail: data.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+                    url: ytUrl,
+                    downloadUrl: ytUrl,
+                };
+            }
+        } catch {
+            /* rethrow original */
+        }
+        throw humanizeYtError(err);
+    }
 }
 
 async function getTempDir(): Promise<string> {
@@ -364,7 +456,27 @@ export async function downloadMedia(
         throw new Error("Could not resolve a downloadable YouTube URL");
     }
 
-    const fullInfo = await ytdl.getInfo(ytUrl);
+    let fullInfo: ytdl.videoInfo;
+    try {
+        fullInfo = await ytdl.getInfo(ytUrl, ytOptions());
+    } catch (err) {
+        // Retry with a different client set
+        try {
+            fullInfo = await ytdl.getInfo(
+                ytUrl,
+                ytOptions({ playerClients: ["TV", "IOS", "ANDROID"] })
+            );
+        } catch (err2) {
+            throw humanizeYtError(err2 || err);
+        }
+    }
+
+    if (!fullInfo.formats?.length) {
+        throw new Error(
+            "YouTube returned no playable formats (bot check or restricted video). Try another link."
+        );
+    }
+
     const pick = pickFormatFilter(format);
 
     const tryChoose = (opts: ytdl.downloadOptions) => {
@@ -383,7 +495,8 @@ export async function downloadMedia(
                 quality: "highest",
             })
             : null) ||
-        tryChoose({ filter: "audioonly", quality: "highestaudio" });
+        tryChoose({ filter: "audioonly", quality: "highestaudio" }) ||
+        tryChoose({ quality: "highest" });
 
     if (!chosen?.url) {
         throw new Error("No suitable stream found for this video. It may be region-locked or age-restricted.");
@@ -402,6 +515,8 @@ export async function downloadMedia(
     const stream = ytdl.downloadFromInfo(fullInfo, {
         format: chosen,
         highWaterMark: 1 << 25,
+        agent: getAgent(),
+        requestOptions: YT_OPTS.requestOptions,
     });
 
     stream.on("progress", (_chunkLen: number, downloaded: number, totalBytes: number) => {
