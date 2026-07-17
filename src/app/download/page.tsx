@@ -38,15 +38,6 @@ interface MediaPreview {
     url: string;
 }
 
-interface DownloadPlan {
-    url: string;
-    fileName: string;
-    inputExt: string;
-    outputExt: Format;
-    mime: string;
-    needsConversion: boolean;
-}
-
 const FORMAT_OPTIONS: {
     value: Format;
     label: string;
@@ -208,48 +199,32 @@ export default function DownloadPage() {
         setProgress(5);
         setStage("Finding the best stream");
 
-        let downloadTicker: number | undefined;
-
         try {
-            const response = await fetch("/api/download", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url: trimmed, format, quality: isVideo ? quality : "best" }),
+            const { downloadMediaInBrowser } = await import("@/lib/browser-media-downloader");
+            const media = await downloadMediaInBrowser({
+                url: trimmed,
+                preview,
+                format,
+                quality: isVideo ? quality : "best",
                 signal: controller.signal,
+                onProgress: (value, nextStage) => {
+                    setProgress(value);
+                    setStage(nextStage);
+                },
             });
-            const plan = await readApiJson<DownloadPlan & { error?: string }>(response);
-            if (!response.ok) throw new Error(plan.error || "The download could not be prepared.");
+            let resultBlob = media.blob;
 
-            setProgress(14);
-            setStage("Downloading securely");
-            let simulated = 14;
-            downloadTicker = window.setInterval(() => {
-                simulated = Math.min(62, simulated + Math.max(0.4, (64 - simulated) * 0.045));
-                setProgress(Math.round(simulated));
-            }, 350);
-
-            const sourceResponse = await fetch(plan.url, { signal: controller.signal });
-            if (!sourceResponse.ok) {
-                throw new Error(`The media host refused the download (${sourceResponse.status}). Try again.`);
-            }
-            const sourceBlob = await sourceResponse.blob();
-            if (sourceBlob.size < 1024) throw new Error("The media host returned an empty file. Try again.");
-
-            window.clearInterval(downloadTicker);
-            downloadTicker = undefined;
-            let resultBlob = sourceBlob;
-
-            if (plan.needsConversion) {
-                setProgress(64);
-                setStage(`Converting to ${plan.outputExt.toUpperCase()} on your device`);
+            if (media.needsConversion) {
+                setProgress(87);
+                setStage(`Converting to ${media.outputExt.toUpperCase()} on your device`);
                 const { convertMedia } = await import("@/lib/ffmpeg-helper");
-                const sourceFile = new File([sourceBlob], `source.${plan.inputExt}`, {
-                    type: sourceBlob.type || "application/octet-stream",
+                const sourceFile = new File([media.blob], `source.${media.inputExt}`, {
+                    type: media.blob.type || "application/octet-stream",
                 });
-                resultBlob = await convertMedia(sourceFile, plan.inputExt, plan.outputExt, {
-                    audioBitrate: plan.outputExt === "mp3" ? "192k" : undefined,
+                resultBlob = await convertMedia(sourceFile, media.inputExt, media.outputExt, {
+                    audioBitrate: media.outputExt === "mp3" ? "192k" : undefined,
                     onProgress: (value, nextStage) => {
-                        setProgress(Math.min(97, 64 + Math.round(value * 0.33)));
+                        setProgress(Math.min(98, 87 + Math.round(value * 0.11)));
                         setStage(nextStage ? `${nextStage.replace(/…/g, "")} on your device` : "Converting on your device");
                     },
                 });
@@ -257,14 +232,13 @@ export default function DownloadPage() {
 
             setProgress(98);
             setStage("Saving file");
-            saveBlob(resultBlob, plan.fileName);
+            saveBlob(resultBlob, media.fileName);
             setProgress(100);
             setStage("Download complete");
             setStatus("done");
-            setDownloadedName(plan.fileName);
-            addToast(`Downloaded ${plan.fileName}`, "success");
+            setDownloadedName(media.fileName);
+            addToast(`Downloaded ${media.fileName}`, "success");
         } catch (caught) {
-            if (downloadTicker) window.clearInterval(downloadTicker);
             if ((caught as Error).name === "AbortError") return;
             const message = caught instanceof Error ? caught.message : "Download failed.";
             setError(message);
@@ -273,7 +247,7 @@ export default function DownloadPage() {
             setStage("");
             addToast(message, "error");
         }
-    }, [url, format, quality, isVideo, addToast]);
+    }, [url, preview, format, quality, isVideo, addToast]);
 
     return (
         <main className={`${styles.page} section`}>
@@ -424,11 +398,11 @@ export default function DownloadPage() {
                         <div className={styles.sideGlow} />
                         <div className={styles.sideIcon}><Zap size={24} /></div>
                         <h2>Built for Vercel.<br />Processed on your device.</h2>
-                        <p>Downloads no longer rely on YouTube cookies or a blocked Vercel server IP. Media is resolved through a federated network, then any conversion happens privately in your browser.</p>
+                        <p>Downloads no longer rely on YouTube cookies, public Piped servers, or a blocked Vercel IP. Stream lookup, transfer, and conversion now happen directly in your browser.</p>
                         <ul>
                             <li><CheckCircle size={15} /><span><strong>No cookie maintenance</strong><small>Nothing to refresh or rotate</small></span></li>
                             <li><CheckCircle size={15} /><span><strong>Real format conversion</strong><small>MP3 and WAV are actually encoded</small></span></li>
-                            <li><CheckCircle size={15} /><span><strong>Automatic failover</strong><small>Unhealthy media hosts are skipped</small></span></li>
+                            <li><CheckCircle size={15} /><span><strong>Your normal connection</strong><small>No datacenter IP in the media path</small></span></li>
                         </ul>
                         <div className={styles.localNote}><ShieldCheck size={16} /> Use public media you have permission to save.</div>
                     </aside>
