@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createReadStream } from "fs";
 import { Readable } from "stream";
+import os from "os";
 import {
     downloadMedia,
     cleanupDownload,
     isSupportedUrl,
     type DownloadFormat,
 } from "@/lib/media-downloader";
+
+// Must be set before ytdl debug dumps run (also set in media-downloader)
+process.env.YTDL_NO_DEBUG_FILE = "1";
+process.env.YTDL_DEBUG_PATH = os.tmpdir();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

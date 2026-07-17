@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import os from "os";
 import { getMediaInfo, isSupportedUrl } from "@/lib/media-downloader";
+
+process.env.YTDL_NO_DEBUG_FILE = "1";
+process.env.YTDL_DEBUG_PATH = os.tmpdir();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

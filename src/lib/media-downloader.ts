@@ -6,6 +6,11 @@ import { randomBytes } from "crypto";
 import { pipeline } from "stream/promises";
 import type { Readable } from "stream";
 
+// Vercel/serverless FS is read-only except /tmp.
+// @distube/ytdl-core writes "*-watch.html" debug dumps to CWD by default → EROFS.
+process.env.YTDL_NO_DEBUG_FILE = "1";
+process.env.YTDL_DEBUG_PATH = os.tmpdir();
+
 // Avoid WEB client — YouTube bot-checks datacenter IPs (Vercel) hard on WEB.
 // IOS / ANDROID / TV / WEB_EMBEDDED bypass most "Sign in to confirm you're not a bot" walls.
 const YT_OPTS: ytdl.getInfoOptions = {
