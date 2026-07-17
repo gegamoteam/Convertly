@@ -4,11 +4,12 @@ import { useState, useCallback, useRef } from "react";
 import {
     Link2, Download, Music, Video, Loader2, CheckCircle,
     AlertTriangle, Youtube, Headphones, ExternalLink, Clock, User,
+    Sparkles, ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import styles from "./download.module.css";
 
-type Format = "mp3" | "mp4" | "m4a" | "webm" | "wav";
+type Format = "mp3" | "mp4" | "m4a" | "webm";
 type JobStatus = "idle" | "fetching" | "ready" | "downloading" | "done" | "error";
 
 interface MediaPreview {
@@ -22,12 +23,27 @@ interface MediaPreview {
 }
 
 const FORMAT_OPTIONS: { value: Format; label: string; kind: "audio" | "video"; desc: string }[] = [
-    { value: "mp3", label: "MP3", kind: "audio", desc: "Best for music" },
+    { value: "mp3", label: "MP3", kind: "audio", desc: "Music / podcasts" },
     { value: "m4a", label: "M4A", kind: "audio", desc: "High quality audio" },
-    { value: "wav", label: "WAV", kind: "audio", desc: "Lossless audio" },
-    { value: "mp4", label: "MP4", kind: "video", desc: "Video + audio" },
+    { value: "mp4", label: "MP4", kind: "video", desc: "Video + sound" },
     { value: "webm", label: "WebM", kind: "video", desc: "Web video" },
 ];
+
+async function readApiJson(res: Response): Promise<Record<string, unknown>> {
+    const text = await res.text();
+    if (!text) return {};
+    try {
+        return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+        // Server returned HTML / plain error (e.g. Vercel 500 page)
+        const snippet = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+        throw new Error(
+            snippet
+                ? `Server error (${res.status}): ${snippet}`
+                : `Server error (${res.status}). Try again in a moment.`
+        );
+    }
+}
 
 function formatDuration(sec?: number): string {
     if (!sec || !Number.isFinite(sec)) return "";
@@ -39,14 +55,12 @@ function formatDuration(sec?: number): string {
 function sourceLabel(source: string): string {
     if (source === "youtube") return "YouTube";
     if (source === "spotify") return "Spotify";
-    if (source === "soundcloud") return "SoundCloud";
     return source;
 }
 
-function SourceIcon({ source }: { source: string }) {
-    if (source === "spotify") return <Headphones size={18} />;
-    if (source === "soundcloud") return <Music size={18} />;
-    return <Youtube size={18} />;
+function SourceIcon({ source, size = 18 }: { source: string; size?: number }) {
+    if (source === "spotify") return <Headphones size={size} />;
+    return <Youtube size={size} />;
 }
 
 export default function DownloadPage() {
@@ -66,10 +80,19 @@ export default function DownloadPage() {
         ? FORMAT_OPTIONS.filter(f => f.kind === "audio")
         : FORMAT_OPTIONS;
 
+    const resetSoft = () => {
+        setStatus("idle");
+        setPreview(null);
+        setError(null);
+        setProgress(0);
+        setStage("");
+        setDownloadedName(null);
+    };
+
     const fetchInfo = useCallback(async () => {
         const trimmed = url.trim();
         if (!trimmed) {
-            setError("Paste a YouTube, Spotify, or SoundCloud link");
+            setError("Paste a YouTube or Spotify track link");
             return;
         }
 
@@ -82,7 +105,7 @@ export default function DownloadPage() {
         setPreview(null);
         setDownloadedName(null);
         setProgress(0);
-        setStage("Fetching info…");
+        setStage("Looking up media…");
 
         try {
             const res = await fetch("/api/download/info", {
@@ -91,13 +114,12 @@ export default function DownloadPage() {
                 body: JSON.stringify({ url: trimmed }),
                 signal: ac.signal,
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to fetch info");
+            const data = await readApiJson(res);
+            if (!res.ok) throw new Error(String(data.error || "Failed to fetch info"));
 
-            setPreview(data as MediaPreview);
+            setPreview(data as unknown as MediaPreview);
             setStatus("ready");
             setStage("");
-            // Spotify is audio-only — coerce format
             if (data.source === "spotify" && (format === "mp4" || format === "webm")) {
                 setFormat("mp3");
             }
@@ -123,19 +145,18 @@ export default function DownloadPage() {
         setStatus("downloading");
         setError(null);
         setDownloadedName(null);
-        setProgress(8);
-        setStage("Starting download…");
+        setProgress(6);
+        setStage("Starting…");
 
-        // Simulated progress while server works (real % only available server-side)
-        let fake = 8;
+        let fake = 6;
         const tick = setInterval(() => {
-            fake = Math.min(88, fake + Math.max(0.4, (90 - fake) * 0.04));
+            fake = Math.min(86, fake + Math.max(0.35, (88 - fake) * 0.035));
             setProgress(Math.round(fake));
-            if (fake < 30) setStage("Connecting…");
-            else if (fake < 60) setStage("Downloading media…");
-            else if (fake < 85) setStage("Encoding…");
+            if (fake < 25) setStage("Connecting…");
+            else if (fake < 55) setStage("Downloading stream…");
+            else if (fake < 80) setStage("Packaging file…");
             else setStage("Almost done…");
-        }, 400);
+        }, 350);
 
         try {
             const res = await fetch("/api/download", {
@@ -147,15 +168,20 @@ export default function DownloadPage() {
 
             clearInterval(tick);
 
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error((data as { error?: string }).error || `Download failed (${res.status})`);
+            const ctype = res.headers.get("Content-Type") || "";
+            if (!res.ok || ctype.includes("application/json")) {
+                const data = await readApiJson(res);
+                throw new Error(String(data.error || `Download failed (${res.status})`));
             }
 
-            setProgress(95);
-            setStage("Saving file…");
+            setProgress(94);
+            setStage("Saving…");
 
             const blob = await res.blob();
+            if (blob.size < 500) {
+                throw new Error("Download returned an empty file. Try another link or format.");
+            }
+
             const disposition = res.headers.get("Content-Disposition") || "";
             const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
             const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
@@ -164,13 +190,6 @@ export default function DownloadPage() {
                 : plainMatch
                     ? plainMatch[1]
                     : `convertly.${format}`;
-
-            const titleHeader = res.headers.get("X-Convertly-Title");
-            if (titleHeader && !utfMatch) {
-                try {
-                    fileName = `${decodeURIComponent(titleHeader)}.${format}`;
-                } catch { /* keep */ }
-            }
 
             const objectUrl = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -182,7 +201,7 @@ export default function DownloadPage() {
             URL.revokeObjectURL(objectUrl);
 
             setProgress(100);
-            setStage("Done");
+            setStage("Complete");
             setStatus("done");
             setDownloadedName(fileName);
             addToast(`Downloaded ${fileName}`, "success");
@@ -201,89 +220,100 @@ export default function DownloadPage() {
     const busy = status === "fetching" || status === "downloading";
 
     return (
-        <div className={`${styles.page} section`}>
-            <div className="container">
-                <div className="section-header">
-                    <p className="section-label">Media Downloader</p>
-                    <h1 className="section-title">
-                        YouTube, Spotify &amp; more{" "}
-                        <span className="gradient-text">to MP3 / MP4</span>
+        <div className={styles.page}>
+            <div className={styles.bg}>
+                <div className={styles.glow1} />
+                <div className={styles.glow2} />
+            </div>
+
+            <div className={`container ${styles.inner}`}>
+                <header className={styles.header}>
+                    <div className={styles.badge}>
+                        <Sparkles size={14} />
+                        Media Downloader
+                    </div>
+                    <h1 className={styles.title}>
+                        YouTube &amp; Spotify
+                        <span className="gradient-text"> to MP3 / MP4</span>
                     </h1>
-                    <p className="section-desc">
-                        Paste a link, pick a format, download. YouTube → MP3/MP4, Spotify tracks → audio. Pure Next.js — no extra installs.
+                    <p className={styles.subtitle}>
+                        Paste a link. Pick a format. Download. No installs, no accounts.
                     </p>
-                </div>
+                    <div className={styles.platformPills}>
+                        <span className={styles.pill}><Youtube size={15} /> YouTube</span>
+                        <span className={styles.pill}><Headphones size={15} /> Spotify</span>
+                        <span className={styles.pillMuted}>MP3 · M4A · MP4 · WebM</span>
+                    </div>
+                </header>
 
-                <div className={styles.layout}>
-                    <div className={styles.card}>
-                        <label className={styles.label}>
-                            <Link2 size={16} /> Media URL
-                        </label>
-                        <div className={styles.inputRow}>
-                            <input
-                                className={styles.input}
-                                type="url"
-                                placeholder="https://youtube.com/watch?v=…  or  open.spotify.com/track/…"
-                                value={url}
-                                onChange={e => {
-                                    setUrl(e.target.value);
-                                    if (status === "done" || status === "error" || status === "ready") {
-                                        setStatus("idle");
-                                        setPreview(null);
-                                        setError(null);
-                                        setProgress(0);
-                                    }
-                                }}
-                                onKeyDown={e => {
-                                    if (e.key === "Enter" && !busy) void fetchInfo();
-                                }}
-                                disabled={busy}
-                            />
-                            <button
-                                className="btn btn-secondary"
-                                onClick={() => void fetchInfo()}
-                                disabled={busy || !url.trim()}
-                            >
-                                {status === "fetching" ? (
-                                    <><Loader2 size={16} className="spinning" /> Fetching</>
-                                ) : (
-                                    "Fetch"
-                                )}
-                            </button>
-                        </div>
-
-                        <div className={styles.platforms}>
-                            <span><Youtube size={14} /> YouTube → MP3 / MP4</span>
-                            <span><Headphones size={14} /> Spotify → MP3</span>
-                        </div>
-
-                        <label className={styles.label} style={{ marginTop: 20 }}>
-                            {format === "mp4" || format === "webm" ? <Video size={16} /> : <Music size={16} />}
-                            Output format
-                        </label>
-                        <div className={styles.formatGrid}>
-                            {availableFormats.map(f => (
-                                <button
-                                    key={f.value}
-                                    type="button"
-                                    className={`${styles.formatBtn} ${format === f.value ? styles.formatBtnActive : ""}`}
-                                    onClick={() => setFormat(f.value)}
+                <div className={styles.shell}>
+                    <div className={styles.mainCard}>
+                        <div className={styles.field}>
+                            <label className={styles.label}>
+                                <Link2 size={15} /> Paste link
+                            </label>
+                            <div className={styles.urlBar}>
+                                <input
+                                    className={styles.input}
+                                    type="url"
+                                    placeholder="youtube.com/watch?v=…  or  open.spotify.com/track/…"
+                                    value={url}
+                                    onChange={e => {
+                                        setUrl(e.target.value);
+                                        if (status !== "idle" && status !== "fetching" && status !== "downloading") {
+                                            resetSoft();
+                                        }
+                                    }}
+                                    onKeyDown={e => {
+                                        if (e.key === "Enter" && !busy) void fetchInfo();
+                                    }}
                                     disabled={busy}
+                                    spellCheck={false}
+                                />
+                                <button
+                                    type="button"
+                                    className={styles.fetchBtn}
+                                    onClick={() => void fetchInfo()}
+                                    disabled={busy || !url.trim()}
                                 >
-                                    <strong>{f.label}</strong>
-                                    <small>{f.desc}</small>
+                                    {status === "fetching" ? (
+                                        <><Loader2 size={16} className="spinning" /> Fetch</>
+                                    ) : (
+                                        <><ArrowRight size={16} /> Fetch</>
+                                    )}
                                 </button>
-                            ))}
+                            </div>
                         </div>
 
-                        {isSpotify && (
-                            <p className={styles.hint}>
-                                Spotify tracks are matched on YouTube and saved as audio (MP3/M4A/WAV).
-                            </p>
-                        )}
+                        <div className={styles.field}>
+                            <label className={styles.label}>
+                                {format === "mp4" || format === "webm" ? <Video size={15} /> : <Music size={15} />}
+                                Format
+                            </label>
+                            <div className={styles.formatRow}>
+                                {availableFormats.map(f => (
+                                    <button
+                                        key={f.value}
+                                        type="button"
+                                        className={`${styles.formatChip} ${format === f.value ? styles.formatChipOn : ""}`}
+                                        onClick={() => setFormat(f.value)}
+                                        disabled={busy}
+                                    >
+                                        <strong>{f.label}</strong>
+                                        <span>{f.desc}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            {isSpotify && (
+                                <p className={styles.hint}>
+                                    Spotify tracks are matched on YouTube and saved as audio.
+                                </p>
+                            )}
+                        </div>
 
                         <button
-                            className={`btn btn-primary ${styles.downloadBtn}`}
+                            type="button"
+                            className={styles.primaryBtn}
                             onClick={() => void startDownload()}
                             disabled={busy || !url.trim()}
                         >
@@ -297,12 +327,12 @@ export default function DownloadPage() {
                         </button>
 
                         {(status === "downloading" || status === "done") && (
-                            <div className={styles.progressWrap}>
+                            <div className={styles.progressBlock}>
                                 <div className={styles.progressMeta}>
                                     <span>{stage || (status === "done" ? "Complete" : "Working…")}</span>
-                                    <span>{progress}%</span>
+                                    <span className={styles.progressPct}>{progress}%</span>
                                 </div>
-                                <div className={styles.progressBar}>
+                                <div className={styles.progressTrack}>
                                     <div
                                         className={`${styles.progressFill} ${status === "done" ? styles.progressDone : ""}`}
                                         style={{ width: `${progress}%` }}
@@ -312,73 +342,72 @@ export default function DownloadPage() {
                         )}
 
                         {error && (
-                            <div className={styles.errorBox}>
+                            <div className={styles.alertError}>
                                 <AlertTriangle size={16} />
                                 <span>{error}</span>
                             </div>
                         )}
 
                         {downloadedName && status === "done" && (
-                            <div className={styles.successBox}>
+                            <div className={styles.alertOk}>
                                 <CheckCircle size={16} />
-                                <span>Saved as <strong>{downloadedName}</strong></span>
+                                <span>Saved <strong>{downloadedName}</strong></span>
                             </div>
                         )}
                     </div>
 
-                    <div className={styles.side}>
+                    <aside className={styles.aside}>
                         {preview ? (
-                            <div className={styles.previewCard}>
-                                {preview.thumbnail ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={preview.thumbnail} alt="" className={styles.thumb} />
-                                ) : (
-                                    <div className={styles.thumbPlaceholder}>
-                                        <SourceIcon source={preview.source} />
-                                    </div>
-                                )}
-                                <div className={styles.previewBody}>
-                                    <span className={styles.sourceBadge}>
-                                        <SourceIcon source={preview.source} />
+                            <div className={styles.preview}>
+                                <div className={styles.previewMedia}>
+                                    {preview.thumbnail ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={preview.thumbnail} alt="" />
+                                    ) : (
+                                        <div className={styles.previewFallback}>
+                                            <SourceIcon source={preview.source} size={28} />
+                                        </div>
+                                    )}
+                                    <span className={styles.sourceTag}>
+                                        <SourceIcon source={preview.source} size={13} />
                                         {sourceLabel(preview.source)}
                                     </span>
-                                    <h3 className={styles.previewTitle}>{preview.title}</h3>
+                                </div>
+                                <div className={styles.previewInfo}>
+                                    <h3>{preview.title}</h3>
                                     {preview.artist && (
-                                        <p className={styles.previewMeta}>
-                                            <User size={14} /> {preview.artist}
-                                        </p>
+                                        <p><User size={14} /> {preview.artist}</p>
                                     )}
-                                    {preview.duration != null && (
-                                        <p className={styles.previewMeta}>
-                                            <Clock size={14} /> {formatDuration(preview.duration)}
-                                        </p>
+                                    {preview.duration != null && preview.duration > 0 && (
+                                        <p><Clock size={14} /> {formatDuration(preview.duration)}</p>
                                     )}
-                                    <a
-                                        href={preview.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={styles.previewLink}
-                                    >
+                                    <a href={preview.url} target="_blank" rel="noopener noreferrer">
                                         Open original <ExternalLink size={12} />
                                     </a>
                                 </div>
                             </div>
                         ) : (
-                            <div className={styles.emptyPreview}>
-                                <Download size={32} strokeWidth={1.5} />
-                                <h3>How it works</h3>
+                            <div className={styles.guide}>
+                                <div className={styles.guideIcon}><Download size={22} /></div>
+                                <h3>Quick start</h3>
                                 <ol>
                                     <li>Paste a YouTube or Spotify track URL</li>
-                                    <li>Optionally hit Fetch to preview</li>
-                                    <li>Choose MP3 / MP4 / etc. and download</li>
+                                    <li>Hit Fetch to preview (optional)</li>
+                                    <li>Pick MP3 / MP4 and download</li>
                                 </ol>
-                                <p className={styles.reqNote}>
-                                    Runs fully on Convertly (Next.js). Spotify tracks are matched to YouTube audio.
-                                    Audio is the best stream YouTube provides (often M4A/WebM) — no system tools required.
-                                </p>
+                                <div className={styles.guideTips}>
+                                    <div>
+                                        <Youtube size={14} />
+                                        <span>YouTube → audio or video</span>
+                                    </div>
+                                    <div>
+                                        <Headphones size={14} />
+                                        <span>Spotify → audio only</span>
+                                    </div>
+                                </div>
                             </div>
                         )}
-                    </div>
+                    </aside>
                 </div>
             </div>
         </div>

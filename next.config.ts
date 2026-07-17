@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@distube/ytdl-core", "yt-search"],
+  serverExternalPackages: ["@distube/ytdl-core"],
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",
