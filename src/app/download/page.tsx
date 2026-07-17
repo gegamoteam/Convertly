@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
     Link2, Download, Music, Video, Loader2, CheckCircle,
     AlertTriangle, Youtube, Headphones, ExternalLink, Clock, User,
-    Sparkles, ArrowRight,
+    Sparkles, MonitorPlay, Shield,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import styles from "./download.module.css";
 
 type Format = "mp3" | "mp4" | "m4a" | "webm";
+type Quality = "best" | "1080" | "720" | "480" | "360";
 type JobStatus = "idle" | "fetching" | "ready" | "downloading" | "done" | "error";
 
 interface MediaPreview {
@@ -29,13 +30,26 @@ const FORMAT_OPTIONS: { value: Format; label: string; kind: "audio" | "video"; d
     { value: "webm", label: "WebM", kind: "video", desc: "Web video" },
 ];
 
+const QUALITY_OPTIONS: { value: Quality; label: string; desc: string }[] = [
+    { value: "best", label: "Best", desc: "Highest available" },
+    { value: "1080", label: "1080p", desc: "Full HD" },
+    { value: "720", label: "720p", desc: "HD" },
+    { value: "480", label: "480p", desc: "SD" },
+    { value: "360", label: "360p", desc: "Low data" },
+];
+
+function looksLikeMediaUrl(value: string): boolean {
+    const v = value.trim();
+    if (!/^https?:\/\//i.test(v)) return false;
+    return /youtube\.com|youtu\.be|spotify\.com/i.test(v);
+}
+
 async function readApiJson(res: Response): Promise<Record<string, unknown>> {
     const text = await res.text();
     if (!text) return {};
     try {
         return JSON.parse(text) as Record<string, unknown>;
     } catch {
-        // Server returned HTML / plain error (e.g. Vercel 500 page)
         const snippet = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
         throw new Error(
             snippet
@@ -66,6 +80,7 @@ function SourceIcon({ source, size = 18 }: { source: string; size?: number }) {
 export default function DownloadPage() {
     const [url, setUrl] = useState("");
     const [format, setFormat] = useState<Format>("mp3");
+    const [quality, setQuality] = useState<Quality>("720");
     const [status, setStatus] = useState<JobStatus>("idle");
     const [progress, setProgress] = useState(0);
     const [stage, setStage] = useState("");
@@ -73,28 +88,19 @@ export default function DownloadPage() {
     const [error, setError] = useState<string | null>(null);
     const [downloadedName, setDownloadedName] = useState<string | null>(null);
     const abortRef = useRef<AbortController | null>(null);
+    const lastFetchedUrl = useRef("");
     const { addToast } = useToast();
 
     const isSpotify = /spotify\.com/i.test(url);
+    const isVideo = format === "mp4" || format === "webm";
     const availableFormats = isSpotify
         ? FORMAT_OPTIONS.filter(f => f.kind === "audio")
         : FORMAT_OPTIONS;
 
-    const resetSoft = () => {
-        setStatus("idle");
-        setPreview(null);
-        setError(null);
-        setProgress(0);
-        setStage("");
-        setDownloadedName(null);
-    };
-
-    const fetchInfo = useCallback(async () => {
-        const trimmed = url.trim();
-        if (!trimmed) {
-            setError("Paste a YouTube or Spotify track link");
-            return;
-        }
+    const fetchInfo = useCallback(async (rawUrl: string) => {
+        const trimmed = rawUrl.trim();
+        if (!trimmed || !looksLikeMediaUrl(trimmed)) return;
+        if (lastFetchedUrl.current === trimmed && status === "ready") return;
 
         abortRef.current?.abort();
         const ac = new AbortController();
@@ -117,22 +123,34 @@ export default function DownloadPage() {
             const data = await readApiJson(res);
             if (!res.ok) throw new Error(String(data.error || "Failed to fetch info"));
 
+            lastFetchedUrl.current = trimmed;
             setPreview(data as unknown as MediaPreview);
             setStatus("ready");
             setStage("");
             if (data.source === "spotify" && (format === "mp4" || format === "webm")) {
                 setFormat("mp3");
             }
-            addToast("Media found", "success");
         } catch (err) {
             if ((err as Error).name === "AbortError") return;
             const msg = err instanceof Error ? err.message : "Failed to fetch info";
             setError(msg);
             setStatus("error");
             setStage("");
-            addToast(msg, "error");
         }
-    }, [url, format, addToast]);
+    }, [format, status]);
+
+    // Auto-fetch when a valid link is pasted/typed (debounced)
+    useEffect(() => {
+        const trimmed = url.trim();
+        if (!looksLikeMediaUrl(trimmed)) return;
+        if (status === "downloading") return;
+        if (lastFetchedUrl.current === trimmed && (status === "ready" || status === "done")) return;
+
+        const t = setTimeout(() => {
+            void fetchInfo(trimmed);
+        }, 450);
+        return () => clearTimeout(t);
+    }, [url, fetchInfo, status]);
 
     const startDownload = useCallback(async () => {
         const trimmed = url.trim();
@@ -162,7 +180,11 @@ export default function DownloadPage() {
             const res = await fetch("/api/download", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url: trimmed, format }),
+                body: JSON.stringify({
+                    url: trimmed,
+                    format,
+                    quality: isVideo ? quality : "best",
+                }),
                 signal: ac.signal,
             });
 
@@ -185,7 +207,7 @@ export default function DownloadPage() {
             const disposition = res.headers.get("Content-Disposition") || "";
             const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
             const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
-            let fileName = utfMatch
+            const fileName = utfMatch
                 ? decodeURIComponent(utfMatch[1])
                 : plainMatch
                     ? plainMatch[1]
@@ -215,7 +237,7 @@ export default function DownloadPage() {
             setStage("");
             addToast(msg, "error");
         }
-    }, [url, format, addToast]);
+    }, [url, format, quality, isVideo, addToast]);
 
     const busy = status === "fetching" || status === "downloading";
 
@@ -237,12 +259,12 @@ export default function DownloadPage() {
                         <span className="gradient-text"> to MP3 / MP4</span>
                     </h1>
                     <p className={styles.subtitle}>
-                        Paste a link. Pick a format. Download. No installs, no accounts.
+                        Paste a link — preview loads automatically. Pick quality &amp; format, then download.
                     </p>
                     <div className={styles.platformPills}>
                         <span className={styles.pill}><Youtube size={15} /> YouTube</span>
                         <span className={styles.pill}><Headphones size={15} /> Spotify</span>
-                        <span className={styles.pillMuted}>MP3 · M4A · MP4 · WebM</span>
+                        <span className={styles.pillMuted}>1080p · 720p · 480p · MP3</span>
                     </div>
                 </header>
 
@@ -251,43 +273,52 @@ export default function DownloadPage() {
                         <div className={styles.field}>
                             <label className={styles.label}>
                                 <Link2 size={15} /> Paste link
+                                {status === "fetching" && (
+                                    <span className={styles.autoHint}>
+                                        <Loader2 size={12} className="spinning" /> fetching…
+                                    </span>
+                                )}
+                                {status === "ready" && preview && (
+                                    <span className={styles.autoOk}>
+                                        <CheckCircle size={12} /> ready
+                                    </span>
+                                )}
                             </label>
                             <div className={styles.urlBar}>
                                 <input
                                     className={styles.input}
                                     type="url"
-                                    placeholder="youtube.com/watch?v=…  or  open.spotify.com/track/…"
+                                    placeholder="Paste youtube.com/watch?v=… or open.spotify.com/track/…"
                                     value={url}
                                     onChange={e => {
-                                        setUrl(e.target.value);
-                                        if (status !== "idle" && status !== "fetching" && status !== "downloading") {
-                                            resetSoft();
+                                        const next = e.target.value;
+                                        setUrl(next);
+                                        if (lastFetchedUrl.current && lastFetchedUrl.current !== next.trim()) {
+                                            lastFetchedUrl.current = "";
+                                            setPreview(null);
+                                            setError(null);
+                                            setDownloadedName(null);
+                                            setStatus("idle");
+                                            setProgress(0);
                                         }
                                     }}
-                                    onKeyDown={e => {
-                                        if (e.key === "Enter" && !busy) void fetchInfo();
+                                    onPaste={e => {
+                                        const pasted = e.clipboardData.getData("text");
+                                        if (looksLikeMediaUrl(pasted)) {
+                                            // Let paste land, effect will auto-fetch
+                                            setTimeout(() => setUrl(pasted.trim()), 0);
+                                        }
                                     }}
-                                    disabled={busy}
+                                    disabled={status === "downloading"}
                                     spellCheck={false}
+                                    autoFocus
                                 />
-                                <button
-                                    type="button"
-                                    className={styles.fetchBtn}
-                                    onClick={() => void fetchInfo()}
-                                    disabled={busy || !url.trim()}
-                                >
-                                    {status === "fetching" ? (
-                                        <><Loader2 size={16} className="spinning" /> Fetch</>
-                                    ) : (
-                                        <><ArrowRight size={16} /> Fetch</>
-                                    )}
-                                </button>
                             </div>
                         </div>
 
                         <div className={styles.field}>
                             <label className={styles.label}>
-                                {format === "mp4" || format === "webm" ? <Video size={15} /> : <Music size={15} />}
+                                {isVideo ? <Video size={15} /> : <Music size={15} />}
                                 Format
                             </label>
                             <div className={styles.formatRow}>
@@ -304,12 +335,38 @@ export default function DownloadPage() {
                                     </button>
                                 ))}
                             </div>
-                            {isSpotify && (
-                                <p className={styles.hint}>
-                                    Spotify tracks are matched on YouTube and saved as audio.
-                                </p>
-                            )}
                         </div>
+
+                        {isVideo && !isSpotify && (
+                            <div className={styles.field}>
+                                <label className={styles.label}>
+                                    <MonitorPlay size={15} /> Quality
+                                </label>
+                                <div className={styles.qualityRow}>
+                                    {QUALITY_OPTIONS.map(q => (
+                                        <button
+                                            key={q.value}
+                                            type="button"
+                                            className={`${styles.qualityChip} ${quality === q.value ? styles.qualityChipOn : ""}`}
+                                            onClick={() => setQuality(q.value)}
+                                            disabled={busy}
+                                            title={q.desc}
+                                        >
+                                            {q.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className={styles.hint}>
+                                    Picks the closest progressive stream at or under the selected resolution.
+                                </p>
+                            </div>
+                        )}
+
+                        {isSpotify && (
+                            <p className={styles.hint}>
+                                Spotify tracks are matched on YouTube and saved as audio.
+                            </p>
+                        )}
 
                         <button
                             type="button"
@@ -322,7 +379,11 @@ export default function DownloadPage() {
                             ) : status === "done" ? (
                                 <><CheckCircle size={18} /> Download again</>
                             ) : (
-                                <><Download size={18} /> Download {format.toUpperCase()}</>
+                                <>
+                                    <Download size={18} />
+                                    Download {format.toUpperCase()}
+                                    {isVideo && quality !== "best" ? ` · ${quality}p` : isVideo ? " · Best" : ""}
+                                </>
                             )}
                         </button>
 
@@ -391,9 +452,9 @@ export default function DownloadPage() {
                                 <div className={styles.guideIcon}><Download size={22} /></div>
                                 <h3>Quick start</h3>
                                 <ol>
-                                    <li>Paste a YouTube or Spotify track URL</li>
-                                    <li>Hit Fetch to preview (optional)</li>
-                                    <li>Pick MP3 / MP4 and download</li>
+                                    <li>Paste a YouTube or Spotify URL</li>
+                                    <li>Preview loads automatically</li>
+                                    <li>Pick format / quality → download</li>
                                 </ol>
                                 <div className={styles.guideTips}>
                                     <div>
@@ -407,6 +468,35 @@ export default function DownloadPage() {
                                 </div>
                             </div>
                         )}
+
+                        <div className={styles.setupCard}>
+                            <div className={styles.setupHead}>
+                                <Shield size={15} />
+                                Unblock YouTube (Vercel)
+                            </div>
+                            <p>
+                                Datacenter IPs get bot-checked. Fix it with env vars on your host:
+                            </p>
+                            <ol>
+                                <li>
+                                    <strong>Proxy (best):</strong> set{" "}
+                                    <code>YOUTUBE_PROXY</code> to a residential proxy URL, e.g.{" "}
+                                    <code>http://user:pass@host:port</code>
+                                </li>
+                                <li>
+                                    <strong>Or cookies:</strong>
+                                    <ul>
+                                        <li>Install EditThisCookie (Chrome)</li>
+                                        <li>Open youtube.com while logged in (use a throwaway account)</li>
+                                        <li>Export cookies → paste JSON into <code>YOUTUBE_COOKIES</code></li>
+                                    </ul>
+                                </li>
+                            </ol>
+                            <p className={styles.setupNote}>
+                                Optional: <code>YOUTUBE_PROXIES</code> = comma-separated list for rotation.
+                                Free datacenter proxies usually still fail — use residential/mobile.
+                            </p>
+                        </div>
                     </aside>
                 </div>
             </div>

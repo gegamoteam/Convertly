@@ -11,8 +11,60 @@ import type { Readable } from "stream";
 process.env.YTDL_NO_DEBUG_FILE = "1";
 process.env.YTDL_DEBUG_PATH = os.tmpdir();
 
+export type MediaSource = "youtube" | "spotify" | "unknown";
+export type DownloadFormat = "mp3" | "mp4" | "m4a" | "webm" | "wav";
+export type VideoQuality = "best" | "1080" | "720" | "480" | "360";
+
+export interface MediaInfo {
+    source: MediaSource;
+    id: string;
+    title: string;
+    artist?: string;
+    duration?: number;
+    thumbnail?: string;
+    url: string;
+    downloadUrl: string;
+}
+
+export interface DownloadResult {
+    filePath: string;
+    fileName: string;
+    mime: string;
+    size: number;
+    title: string;
+}
+
+export interface DownloadOptions {
+    format: DownloadFormat;
+    quality?: VideoQuality;
+    onProgress?: (pct: number, stage: string) => void;
+}
+
+const YT_HOSTS = [
+    "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com",
+    "youtu.be", "www.youtu.be",
+];
+const SPOTIFY_HOSTS = ["open.spotify.com", "spotify.com", "www.spotify.com"];
+
+const MIME: Record<string, string> = {
+    mp3: "audio/mpeg",
+    m4a: "audio/mp4",
+    wav: "audio/wav",
+    webm: "video/webm",
+    mp4: "video/mp4",
+};
+
+const UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+const QUALITY_HEIGHT: Record<Exclude<VideoQuality, "best">, number> = {
+    "1080": 1080,
+    "720": 720,
+    "480": 480,
+    "360": 360,
+};
+
 // Avoid WEB client — YouTube bot-checks datacenter IPs (Vercel) hard on WEB.
-// IOS / ANDROID / TV / WEB_EMBEDDED bypass most "Sign in to confirm you're not a bot" walls.
 const YT_OPTS: ytdl.getInfoOptions = {
     playerClients: ["ANDROID", "IOS", "TV", "WEB_EMBEDDED"],
     requestOptions: {
@@ -24,16 +76,52 @@ const YT_OPTS: ytdl.getInfoOptions = {
     },
 };
 
-let agent: ReturnType<typeof ytdl.createAgent> | null = null;
+let agent: ReturnType<typeof ytdl.createAgent> | ReturnType<typeof ytdl.createProxyAgent> | null = null;
+
+function parseCookies(): Parameters<typeof ytdl.createAgent>[0] | undefined {
+    const raw = process.env.YOUTUBE_COOKIES?.trim();
+    if (!raw) return undefined;
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed as Parameters<typeof ytdl.createAgent>[0];
+    } catch {
+        // Netscape-style "name=value; name2=value2" cookie header string
+        if (raw.includes("=")) {
+            return raw.split(";").map(part => {
+                const [name, ...rest] = part.trim().split("=");
+                return { name: name.trim(), value: rest.join("=").trim() };
+            }) as Parameters<typeof ytdl.createAgent>[0];
+        }
+    }
+    return undefined;
+}
+
+function getProxyList(): string[] {
+    const multi = process.env.YOUTUBE_PROXIES?.trim();
+    if (multi) {
+        return multi.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+    }
+    const single = process.env.YOUTUBE_PROXY?.trim() || process.env.HTTPS_PROXY?.trim() || process.env.HTTP_PROXY?.trim();
+    return single ? [single] : [];
+}
+
+function pickProxy(): string | undefined {
+    const list = getProxyList();
+    if (!list.length) return undefined;
+    return list[Math.floor(Math.random() * list.length)];
+}
 
 function getAgent() {
     if (agent) return agent;
-    // Optional: set YOUTUBE_COOKIES to a JSON array of cookies (EditThisCookie export)
-    // if Vercel IPs still get bot-checked for some videos.
-    const raw = process.env.YOUTUBE_COOKIES?.trim();
+
+    const cookies = parseCookies();
+    const proxy = pickProxy();
+
     try {
-        if (raw) {
-            const cookies = JSON.parse(raw) as Parameters<typeof ytdl.createAgent>[0];
+        if (proxy) {
+            // Residential/mobile proxies work best vs YouTube bot checks
+            agent = ytdl.createProxyAgent({ uri: proxy }, cookies || []);
+        } else if (cookies) {
             agent = ytdl.createAgent(cookies);
         } else {
             agent = ytdl.createAgent();
@@ -42,6 +130,12 @@ function getAgent() {
         agent = ytdl.createAgent();
     }
     return agent;
+}
+
+/** Force rebuild agent (e.g. after rotating proxy) */
+function rotateAgent() {
+    agent = null;
+    return getAgent();
 }
 
 function ytOptions(extra?: ytdl.getInfoOptions): ytdl.getInfoOptions {
@@ -64,8 +158,20 @@ function ytOptions(extra?: ytdl.getInfoOptions): ytdl.getInfoOptions {
 function humanizeYtError(err: unknown): Error {
     const msg = err instanceof Error ? err.message : String(err);
     if (/sign in to confirm|not a bot|bot/i.test(msg)) {
+        const hasProxy = getProxyList().length > 0;
+        const hasCookies = !!process.env.YOUTUBE_COOKIES?.trim();
+        if (!hasProxy && !hasCookies) {
+            return new Error(
+                "YouTube is blocking this server IP. On Vercel, set YOUTUBE_PROXY (residential) or YOUTUBE_COOKIES. See /download for setup tips."
+            );
+        }
+        if (hasCookies && !hasProxy) {
+            return new Error(
+                "YouTube still bot-checked this IP even with cookies. Add a residential proxy via YOUTUBE_PROXY."
+            );
+        }
         return new Error(
-            "YouTube is blocking this server IP (bot check). Try another video, or set YOUTUBE_COOKIES on the host."
+            "YouTube bot check failed. Try another proxy (YOUTUBE_PROXIES) or refresh cookies."
         );
     }
     if (/status code 4\d\d|status: 4\d\d|HTTP Error 4/i.test(msg)) {
@@ -76,45 +182,6 @@ function humanizeYtError(err: unknown): Error {
     }
     return err instanceof Error ? err : new Error(msg);
 }
-
-export type MediaSource = "youtube" | "spotify" | "unknown";
-export type DownloadFormat = "mp3" | "mp4" | "m4a" | "webm" | "wav";
-
-export interface MediaInfo {
-    source: MediaSource;
-    id: string;
-    title: string;
-    artist?: string;
-    duration?: number;
-    thumbnail?: string;
-    url: string;
-    downloadUrl: string;
-}
-
-export interface DownloadResult {
-    filePath: string;
-    fileName: string;
-    mime: string;
-    size: number;
-    title: string;
-}
-
-const YT_HOSTS = [
-    "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com",
-    "youtu.be", "www.youtu.be",
-];
-const SPOTIFY_HOSTS = ["open.spotify.com", "spotify.com", "www.spotify.com"];
-
-const MIME: Record<string, string> = {
-    mp3: "audio/mpeg",
-    m4a: "audio/mp4",
-    wav: "audio/wav",
-    webm: "video/webm",
-    mp4: "video/mp4",
-};
-
-const UA =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
 export function detectSource(rawUrl: string): MediaSource {
     try {
@@ -183,7 +250,6 @@ async function fetchSpotifyMeta(url: string): Promise<{ title: string; artist?: 
     return { title: raw, thumbnail: data.thumbnail_url };
 }
 
-/** YouTube search via Innertube — no cheerio/yt-search (Vercel-safe) */
 async function searchYoutube(query: string): Promise<{
     videoId: string;
     title: string;
@@ -195,7 +261,6 @@ async function searchYoutube(query: string): Promise<{
     const q = query.trim();
     if (!q) throw new Error("Empty search query");
 
-    // Primary: Innertube search API
     try {
         const res = await fetch("https://www.youtube.com/youtubei/v1/search?prettyPrint=false", {
             method: "POST",
@@ -225,10 +290,9 @@ async function searchYoutube(query: string): Promise<{
             if (hit) return hit;
         }
     } catch {
-        /* fallback below */
+        /* fallback */
     }
 
-    // Fallback: scrape videoId from results page (regex only)
     const page = await fetch(
         `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
         {
@@ -238,18 +302,12 @@ async function searchYoutube(query: string): Promise<{
     );
     if (!page.ok) throw new Error(`YouTube search failed (${page.status})`);
     const html = await page.text();
-
     const idMatch = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-    if (!idMatch?.[1]) {
-        throw new Error(`No YouTube match found for "${q}"`);
-    }
+    if (!idMatch?.[1]) throw new Error(`No YouTube match found for "${q}"`);
     const videoId = idMatch[1];
-    const titleMatch = html.match(new RegExp(`"videoId":"${videoId}".*?"title":\\{"runs":\\[\\{"text":"([^"]+)"`));
-    const title = titleMatch?.[1]?.replace(/\\u0026/g, "&") || q;
-
     return {
         videoId,
-        title,
+        title: q,
         author: "",
         duration: 0,
         thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
@@ -266,7 +324,6 @@ function findFirstVideo(node: unknown, depth = 0): {
     url: string;
 } | null {
     if (!node || depth > 25) return null;
-
     if (Array.isArray(node)) {
         for (const item of node) {
             const found = findFirstVideo(item, depth + 1);
@@ -274,10 +331,8 @@ function findFirstVideo(node: unknown, depth = 0): {
         }
         return null;
     }
-
     if (typeof node !== "object") return null;
     const obj = node as Record<string, unknown>;
-
     const vr = obj.videoRenderer as Record<string, unknown> | undefined;
     if (vr && typeof vr.videoId === "string" && ytdl.validateID(vr.videoId)) {
         const videoId = vr.videoId;
@@ -290,23 +345,17 @@ function findFirstVideo(node: unknown, depth = 0): {
             (vr.shortBylineText as { runs?: { text?: string }[] })?.runs?.[0]?.text ||
             "";
         const lengthText =
-            (vr.lengthText as { simpleText?: string })?.simpleText ||
-            (vr.thumbnailOverlays as { thumbnailOverlayTimeStatusRenderer?: { text?: { simpleText?: string } } }[])?.[0]
-                ?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText ||
-            "";
+            (vr.lengthText as { simpleText?: string })?.simpleText || "";
         const thumbs = (vr.thumbnail as { thumbnails?: { url?: string }[] })?.thumbnails;
-        const thumbnail = thumbs?.at(-1)?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-
         return {
             videoId,
             title,
             author,
             duration: parseDuration(lengthText),
-            thumbnail,
+            thumbnail: thumbs?.at(-1)?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
             url: `https://www.youtube.com/watch?v=${videoId}`,
         };
     }
-
     for (const key of Object.keys(obj)) {
         const found = findFirstVideo(obj[key], depth + 1);
         if (found) return found;
@@ -339,7 +388,6 @@ export async function getMediaInfo(rawUrl: string): Promise<MediaInfo> {
         const meta = await fetchSpotifyMeta(url);
         const query = [meta.artist, meta.title].filter(Boolean).join(" ");
         const yt = await searchYoutube(query || meta.title);
-
         return {
             source: "spotify",
             id: url.match(/track\/([a-zA-Z0-9]+)/)?.[1] || yt.videoId,
@@ -353,14 +401,11 @@ export async function getMediaInfo(rawUrl: string): Promise<MediaInfo> {
     }
 
     const ytUrl = normalizeYoutubeUrl(url);
-    if (!ytdl.validateURL(ytUrl)) {
-        throw new Error("Invalid YouTube URL");
-    }
+    if (!ytdl.validateURL(ytUrl)) throw new Error("Invalid YouTube URL");
 
     try {
         const info = await ytdl.getBasicInfo(ytUrl, ytOptions());
         const d = info.videoDetails;
-
         return {
             source: "youtube",
             id: d.videoId,
@@ -372,7 +417,6 @@ export async function getMediaInfo(rawUrl: string): Promise<MediaInfo> {
             downloadUrl: ytUrl,
         };
     } catch (err) {
-        // Fallback: oEmbed (no stream, but good preview metadata)
         try {
             const o = await fetch(
                 `https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`,
@@ -392,7 +436,7 @@ export async function getMediaInfo(rawUrl: string): Promise<MediaInfo> {
                 };
             }
         } catch {
-            /* rethrow original */
+            /* rethrow */
         }
         throw humanizeYtError(err);
     }
@@ -404,30 +448,71 @@ async function getTempDir(): Promise<string> {
     return dir;
 }
 
-function pickFormatFilter(format: DownloadFormat): {
-    filter: ytdl.downloadOptions["filter"];
-    quality: ytdl.downloadOptions["quality"];
-} {
-    switch (format) {
-        case "mp4":
-            return {
-                filter: (f) => f.container === "mp4" && !!f.hasVideo && !!f.hasAudio,
-                quality: "highest",
-            };
-        case "webm":
-            return {
-                filter: (f) =>
-                    (f.container === "webm" || f.container === "mp4") &&
-                    !!f.hasVideo &&
-                    !!f.hasAudio,
-                quality: "highest",
-            };
-        case "m4a":
-        case "wav":
-        case "mp3":
-        default:
-            return { filter: "audioonly", quality: "highestaudio" };
+function formatHeight(f: ytdl.videoFormat): number {
+    if (typeof f.height === "number" && f.height > 0) return f.height;
+    const q = String(f.qualityLabel || f.quality || "");
+    const m = q.match(/(\d{3,4})p/i);
+    return m ? parseInt(m[1], 10) : 0;
+}
+
+function chooseFormat(
+    formats: ytdl.videoFormat[],
+    format: DownloadFormat,
+    quality: VideoQuality = "best"
+): ytdl.videoFormat | null {
+    const tryChoose = (opts: ytdl.downloadOptions) => {
+        try {
+            return ytdl.chooseFormat(formats, opts);
+        } catch {
+            return null;
+        }
+    };
+
+    const isAudio = format === "mp3" || format === "m4a" || format === "wav";
+    if (isAudio) {
+        return (
+            tryChoose({ filter: "audioonly", quality: "highestaudio" }) ||
+            tryChoose({ quality: "highestaudio" })
+        );
     }
+
+    const wantH = quality === "best" ? 9999 : QUALITY_HEIGHT[quality];
+    const preferMp4 = format === "mp4";
+
+    // Prefer progressive (video+audio) at or below target height
+    const progressive = formats
+        .filter(f => f.hasVideo && f.hasAudio)
+        .filter(f => !preferMp4 || f.container === "mp4" || f.container === "m4a")
+        .map(f => ({ f, h: formatHeight(f) }))
+        .filter(x => x.h > 0)
+        .sort((a, b) => {
+            // Closest without going over target, then prefer higher
+            const aOver = a.h > wantH ? 1 : 0;
+            const bOver = b.h > wantH ? 1 : 0;
+            if (aOver !== bOver) return aOver - bOver;
+            if (aOver === 0) return b.h - a.h; // under target: higher is better
+            return a.h - b.h; // over target: lower is better
+        });
+
+    if (progressive.length) {
+        // For exact-ish match: take best under/at target
+        const under = progressive.filter(x => x.h <= wantH);
+        if (under.length) return under[0].f;
+        return progressive[0].f;
+    }
+
+    // Fallback: any progressive, then any with video
+    return (
+        tryChoose({
+            filter: (f) => !!f.hasVideo && !!f.hasAudio && (!preferMp4 || f.container === "mp4"),
+            quality: quality === "best" ? "highest" : `${quality}p` as ytdl.downloadOptions["quality"],
+        }) ||
+        tryChoose({
+            filter: (f) => !!f.hasVideo && !!f.hasAudio,
+            quality: "highest",
+        }) ||
+        tryChoose({ quality: "highest" })
+    );
 }
 
 function resolveOutputExt(
@@ -443,11 +528,37 @@ function resolveOutputExt(
     return "m4a";
 }
 
+async function getYtInfo(ytUrl: string): Promise<ytdl.videoInfo> {
+    const attempts: ytdl.getInfoOptions[] = [
+        ytOptions(),
+        ytOptions({ playerClients: ["TV", "IOS", "ANDROID"] }),
+        ytOptions({ playerClients: ["ANDROID", "IOS"] }),
+    ];
+
+    let lastErr: unknown;
+    for (let i = 0; i < attempts.length; i++) {
+        try {
+            if (i > 0 && getProxyList().length > 1) rotateAgent();
+            return await ytdl.getInfo(ytUrl, attempts[i]);
+        } catch (err) {
+            lastErr = err;
+        }
+    }
+    throw humanizeYtError(lastErr);
+}
+
 export async function downloadMedia(
     rawUrl: string,
-    format: DownloadFormat,
-    onProgress?: (pct: number, stage: string) => void
+    formatOrOpts: DownloadFormat | DownloadOptions,
+    onProgressLegacy?: (pct: number, stage: string) => void
 ): Promise<DownloadResult> {
+    const opts: DownloadOptions =
+        typeof formatOrOpts === "string"
+            ? { format: formatOrOpts, onProgress: onProgressLegacy }
+            : formatOrOpts;
+
+    const { format, quality = "best", onProgress } = opts;
+
     onProgress?.(3, "Resolving media…");
     const info = await getMediaInfo(rawUrl);
 
@@ -461,20 +572,7 @@ export async function downloadMedia(
         throw new Error("Could not resolve a downloadable YouTube URL");
     }
 
-    let fullInfo: ytdl.videoInfo;
-    try {
-        fullInfo = await ytdl.getInfo(ytUrl, ytOptions());
-    } catch (err) {
-        // Retry with a different client set
-        try {
-            fullInfo = await ytdl.getInfo(
-                ytUrl,
-                ytOptions({ playerClients: ["TV", "IOS", "ANDROID"] })
-            );
-        } catch (err2) {
-            throw humanizeYtError(err2 || err);
-        }
-    }
+    const fullInfo = await getYtInfo(ytUrl);
 
     if (!fullInfo.formats?.length) {
         throw new Error(
@@ -482,37 +580,20 @@ export async function downloadMedia(
         );
     }
 
-    const pick = pickFormatFilter(format);
-
-    const tryChoose = (opts: ytdl.downloadOptions) => {
-        try {
-            return ytdl.chooseFormat(fullInfo.formats, opts);
-        } catch {
-            return null;
-        }
-    };
-
-    const chosen =
-        tryChoose({ filter: pick.filter, quality: pick.quality }) ||
-        ((format === "mp4" || format === "webm")
-            ? tryChoose({
-                filter: (f) => !!f.hasVideo && !!f.hasAudio,
-                quality: "highest",
-            })
-            : null) ||
-        tryChoose({ filter: "audioonly", quality: "highestaudio" }) ||
-        tryChoose({ quality: "highest" });
-
+    const chosen = chooseFormat(fullInfo.formats, format, quality);
     if (!chosen?.url) {
         throw new Error("No suitable stream found for this video. It may be region-locked or age-restricted.");
     }
 
     const outExt = resolveOutputExt(format, chosen);
     const dir = await getTempDir();
+    const qTag = format === "mp4" || format === "webm"
+        ? (quality === "best" ? "" : `_${quality}p`)
+        : "";
     const baseName = sanitizeFileName(
         info.artist ? `${info.artist} - ${info.title}` : info.title
     );
-    const fileName = `${baseName}.${outExt}`;
+    const fileName = `${baseName}${qTag}.${outExt}`;
     const filePath = path.join(dir, `media.${outExt}`);
 
     onProgress?.(15, "Downloading…");
