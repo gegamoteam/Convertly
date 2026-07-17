@@ -482,7 +482,7 @@ function chooseFormat(
     // Prefer progressive (video+audio) at or below target height
     const progressive = formats
         .filter(f => f.hasVideo && f.hasAudio)
-        .filter(f => !preferMp4 || f.container === "mp4" || f.container === "m4a")
+        .filter(f => !preferMp4 || f.container === "mp4")
         .map(f => ({ f, h: formatHeight(f) }))
         .filter(x => x.h > 0)
         .sort((a, b) => {
