@@ -208,7 +208,7 @@ export default function DownloadPage() {
         setProgress(5);
         setStage("Finding the best stream");
 
-        let downloadTicker: ReturnType<typeof setInterval> | undefined;
+        let downloadTicker: number | undefined;
 
         try {
             const response = await fetch("/api/download", {
