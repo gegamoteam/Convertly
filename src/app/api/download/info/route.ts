@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import os from "os";
 import { getMediaInfo, isSupportedUrl } from "@/lib/media-downloader";
-
-process.env.YTDL_NO_DEBUG_FILE = "1";
-process.env.YTDL_DEBUG_PATH = os.tmpdir();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +15,7 @@ export async function POST(req: NextRequest) {
         }
         if (!isSupportedUrl(url)) {
             return NextResponse.json(
-                { error: "Unsupported link. Use YouTube or Spotify track URLs." },
+                { error: "Unsupported link. Use a YouTube video or Spotify track URL." },
                 { status: 400 }
             );
         }
@@ -36,6 +32,7 @@ export async function POST(req: NextRequest) {
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to fetch media info";
-        return NextResponse.json({ error: message }, { status: 500 });
+        console.error("[api/download/info] failed", { message });
+        return NextResponse.json({ error: message }, { status: 502 });
     }
 }

@@ -1,27 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createReadStream } from "fs";
-import { Readable } from "stream";
-import os from "os";
 import {
-    downloadMedia,
-    cleanupDownload,
+    createDownloadPlan,
     isSupportedUrl,
     type DownloadFormat,
     type VideoQuality,
 } from "@/lib/media-downloader";
 
-process.env.YTDL_NO_DEBUG_FILE = "1";
-process.env.YTDL_DEBUG_PATH = os.tmpdir();
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const FORMATS = new Set<DownloadFormat>(["mp3", "mp4", "m4a", "webm", "wav"]);
-const QUALITIES = new Set<VideoQuality>(["best", "1080", "720", "480", "360"]);
+const QUALITIES = new Set<VideoQuality>(["best", "720", "480", "360"]);
 
 async function handleDownload(url: string, formatRaw: string, qualityRaw: string) {
-    let filePath: string | null = null;
     const format = formatRaw.toLowerCase() as DownloadFormat;
     const quality = (qualityRaw.toLowerCase() || "best") as VideoQuality;
 
@@ -31,56 +23,36 @@ async function handleDownload(url: string, formatRaw: string, qualityRaw: string
         }
         if (!isSupportedUrl(url)) {
             return NextResponse.json(
-                { error: "Unsupported link. Use YouTube or Spotify track URLs." },
+                { error: "Unsupported link. Use a YouTube video or Spotify track URL." },
                 { status: 400 }
             );
         }
         if (!FORMATS.has(format)) {
             return NextResponse.json(
-                { error: "Invalid format. Use mp3, mp4, m4a, webm, or wav." },
+                { error: "Invalid format. Use MP3, MP4, M4A, WebM, or WAV." },
                 { status: 400 }
             );
         }
         if (!QUALITIES.has(quality)) {
             return NextResponse.json(
-                { error: "Invalid quality. Use best, 1080, 720, 480, or 360." },
+                { error: "Invalid quality. Use best, 720, 480, or 360." },
                 { status: 400 }
             );
         }
 
-        const result = await downloadMedia(url, { format, quality });
-        filePath = result.filePath;
-
-        const nodeStream = createReadStream(result.filePath);
-        const webStream = Readable.toWeb(nodeStream) as ReadableStream;
-
-        const cleanup = () => {
-            if (filePath) void cleanupDownload(filePath);
-            filePath = null;
-        };
-        nodeStream.on("close", cleanup);
-        nodeStream.on("error", cleanup);
-
-        const headers = new Headers();
-        headers.set("Content-Type", result.mime);
-        headers.set("Content-Length", String(result.size));
-        headers.set(
-            "Content-Disposition",
-            `attachment; filename*=UTF-8''${encodeURIComponent(result.fileName)}`
-        );
-        headers.set("X-Convertly-Title", encodeURIComponent(result.title));
-        headers.set("Cache-Control", "no-store");
-
-        return new NextResponse(webStream, { status: 200, headers });
-    } catch (err) {
-        if (filePath) await cleanupDownload(filePath);
-        const message = err instanceof Error ? err.message : "Download failed";
-        return NextResponse.json({ error: message }, { status: 500 });
+        const plan = await createDownloadPlan(url, { format, quality });
+        return NextResponse.json(plan, {
+            headers: { "Cache-Control": "no-store" },
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Download could not be prepared";
+        console.error("[api/download] failed", { message, format, quality });
+        return NextResponse.json({ error: message }, { status: 502 });
     }
 }
 
-export async function POST(req: NextRequest) {
-    const body = await req.json().catch(() => ({})) as {
+export async function POST(request: NextRequest) {
+    const body = await request.json().catch(() => ({})) as {
         url?: string;
         format?: string;
         quality?: string;
@@ -91,9 +63,9 @@ export async function POST(req: NextRequest) {
     return handleDownload(url, format, quality);
 }
 
-export async function GET(req: NextRequest) {
-    const url = (req.nextUrl.searchParams.get("url") || "").trim();
-    const format = req.nextUrl.searchParams.get("format") || "mp3";
-    const quality = req.nextUrl.searchParams.get("quality") || "best";
+export async function GET(request: NextRequest) {
+    const url = (request.nextUrl.searchParams.get("url") || "").trim();
+    const format = request.nextUrl.searchParams.get("format") || "mp3";
+    const quality = request.nextUrl.searchParams.get("quality") || "best";
     return handleDownload(url, format, quality);
 }

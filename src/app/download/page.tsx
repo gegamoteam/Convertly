@@ -1,20 +1,35 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Link2, Download, Music, Video, Loader2, CheckCircle,
-    AlertTriangle, Youtube, Headphones, ExternalLink, Clock, User,
+    AlertTriangle,
+    Check,
+    CheckCircle,
+    ClipboardPaste,
+    Download,
+    ExternalLink,
+    FileAudio,
+    FileVideo,
+    Headphones,
+    Link2,
+    Loader2,
     MonitorPlay,
+    Music,
+    ShieldCheck,
+    Sparkles,
+    Video,
+    Youtube,
+    Zap,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import styles from "./download.module.css";
 
-type Format = "mp3" | "mp4" | "m4a" | "webm";
-type Quality = "best" | "1080" | "720" | "480" | "360";
+type Format = "mp3" | "mp4" | "m4a" | "webm" | "wav";
+type Quality = "best" | "720" | "480" | "360";
 type JobStatus = "idle" | "fetching" | "ready" | "downloading" | "done" | "error";
 
 interface MediaPreview {
-    source: string;
+    source: "youtube" | "spotify";
     id: string;
     title: string;
     artist?: string;
@@ -23,47 +38,70 @@ interface MediaPreview {
     url: string;
 }
 
-const FORMAT_OPTIONS: { value: Format; label: string; kind: "audio" | "video" }[] = [
-    { value: "mp3", label: "MP3", kind: "audio" },
-    { value: "m4a", label: "M4A", kind: "audio" },
-    { value: "mp4", label: "MP4", kind: "video" },
-    { value: "webm", label: "WebM", kind: "video" },
+interface DownloadPlan {
+    url: string;
+    fileName: string;
+    inputExt: string;
+    outputExt: Format;
+    mime: string;
+    needsConversion: boolean;
+}
+
+const FORMAT_OPTIONS: {
+    value: Format;
+    label: string;
+    description: string;
+    kind: "audio" | "video";
+}[] = [
+    { value: "mp3", label: "MP3", description: "Universal audio", kind: "audio" },
+    { value: "m4a", label: "M4A", description: "High-quality audio", kind: "audio" },
+    { value: "wav", label: "WAV", description: "Lossless audio", kind: "audio" },
+    { value: "mp4", label: "MP4", description: "Best compatibility", kind: "video" },
+    { value: "webm", label: "WebM", description: "Web optimized", kind: "video" },
 ];
 
-const QUALITY_OPTIONS: { value: Quality; label: string }[] = [
-    { value: "best", label: "Best" },
-    { value: "1080", label: "1080p" },
-    { value: "720", label: "720p" },
-    { value: "480", label: "480p" },
-    { value: "360", label: "360p" },
+const QUALITY_OPTIONS: { value: Quality; label: string; detail: string }[] = [
+    { value: "best", label: "Best", detail: "Auto" },
+    { value: "720", label: "720p", detail: "HD" },
+    { value: "480", label: "480p", detail: "SD" },
+    { value: "360", label: "360p", detail: "Small" },
 ];
 
 function looksLikeMediaUrl(value: string): boolean {
-    const v = value.trim();
-    if (!/^https?:\/\//i.test(v)) return false;
-    return /youtube\.com|youtu\.be|spotify\.com/i.test(v);
+    const normalized = value.trim();
+    if (!/^https?:\/\//i.test(normalized)) return false;
+    return /(?:youtube\.com|youtu\.be|spotify\.com)/i.test(normalized);
 }
 
-async function readApiJson(res: Response): Promise<Record<string, unknown>> {
-    const text = await res.text();
-    if (!text) return {};
+async function readApiJson<T>(response: Response): Promise<T> {
+    const text = await response.text();
+    if (!text) return {} as T;
     try {
-        return JSON.parse(text) as Record<string, unknown>;
+        return JSON.parse(text) as T;
     } catch {
-        const snippet = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
-        throw new Error(
-            snippet
-                ? `Server error (${res.status}): ${snippet}`
-                : `Server error (${res.status}). Try again in a moment.`
-        );
+        throw new Error(`The server returned an invalid response (${response.status}).`);
     }
 }
 
-function formatDuration(sec?: number): string {
-    if (!sec || !Number.isFinite(sec)) return "";
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
+function formatDuration(seconds?: number): string {
+    if (!seconds || !Number.isFinite(seconds)) return "";
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    return hours
+        ? `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+        : `${minutes}:${secs.toString().padStart(2, "0")}`;
+}
+
+function saveBlob(blob: Blob, fileName: string) {
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
 }
 
 export default function DownloadPage() {
@@ -77,327 +115,332 @@ export default function DownloadPage() {
     const [error, setError] = useState<string | null>(null);
     const [downloadedName, setDownloadedName] = useState<string | null>(null);
     const abortRef = useRef<AbortController | null>(null);
-    const lastFetchedUrl = useRef("");
+    const lastRequestedUrl = useRef("");
     const { addToast } = useToast();
 
-    const isSpotify = /spotify\.com/i.test(url);
+    const isSpotify = preview?.source === "spotify" || /spotify\.com/i.test(url);
     const isVideo = format === "mp4" || format === "webm";
     const availableFormats = isSpotify
-        ? FORMAT_OPTIONS.filter(f => f.kind === "audio")
+        ? FORMAT_OPTIONS.filter(option => option.kind === "audio")
         : FORMAT_OPTIONS;
+    const busy = status === "fetching" || status === "downloading";
 
-    const fetchInfo = useCallback(async (rawUrl: string) => {
+    const resetForUrl = useCallback((nextUrl: string) => {
+        setUrl(nextUrl);
+        lastRequestedUrl.current = "";
+        setPreview(null);
+        setError(null);
+        setDownloadedName(null);
+        setStatus("idle");
+        setProgress(0);
+        setStage("");
+    }, []);
+
+    const fetchInfo = useCallback(async (rawUrl: string, force = false) => {
         const trimmed = rawUrl.trim();
-        if (!trimmed || !looksLikeMediaUrl(trimmed)) return;
-        if (lastFetchedUrl.current === trimmed && status === "ready") return;
+        if (!looksLikeMediaUrl(trimmed)) return;
+        if (!force && lastRequestedUrl.current === trimmed) return;
 
         abortRef.current?.abort();
-        const ac = new AbortController();
-        abortRef.current = ac;
+        const controller = new AbortController();
+        abortRef.current = controller;
+        lastRequestedUrl.current = trimmed;
 
         setStatus("fetching");
         setError(null);
         setPreview(null);
         setDownloadedName(null);
-        setProgress(0);
 
         try {
-            const res = await fetch("/api/download/info", {
+            const response = await fetch("/api/download/info", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: trimmed }),
-                signal: ac.signal,
+                signal: controller.signal,
             });
-            const data = await readApiJson(res);
-            if (!res.ok) throw new Error(String(data.error || "Failed to fetch info"));
+            const data = await readApiJson<MediaPreview & { error?: string }>(response);
+            if (!response.ok) throw new Error(data.error || "Could not read that link.");
 
-            lastFetchedUrl.current = trimmed;
-            setPreview(data as unknown as MediaPreview);
+            setPreview(data);
             setStatus("ready");
-            if (data.source === "spotify" && (format === "mp4" || format === "webm")) {
-                setFormat("mp3");
+            if (data.source === "spotify") {
+                setFormat(current => current === "mp4" || current === "webm" ? "mp3" : current);
             }
-        } catch (err) {
-            if ((err as Error).name === "AbortError") return;
-            const msg = err instanceof Error ? err.message : "Failed to fetch info";
-            setError(msg);
+        } catch (caught) {
+            if ((caught as Error).name === "AbortError") return;
+            const message = caught instanceof Error ? caught.message : "Could not read that link.";
+            setError(message);
             setStatus("error");
         }
-    }, [format, status]);
+    }, []);
 
     useEffect(() => {
         const trimmed = url.trim();
-        if (!looksLikeMediaUrl(trimmed)) return;
-        if (status === "downloading") return;
-        if (lastFetchedUrl.current === trimmed && (status === "ready" || status === "done")) return;
+        if (!looksLikeMediaUrl(trimmed) || lastRequestedUrl.current === trimmed) return;
+        const timer = window.setTimeout(() => void fetchInfo(trimmed), 500);
+        return () => window.clearTimeout(timer);
+    }, [url, fetchInfo]);
 
-        const t = setTimeout(() => {
-            void fetchInfo(trimmed);
-        }, 450);
-        return () => clearTimeout(t);
-    }, [url, fetchInfo, status]);
+    useEffect(() => () => abortRef.current?.abort(), []);
+
+    const pasteLink = useCallback(async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            resetForUrl(text.trim());
+        } catch {
+            addToast("Clipboard access was blocked. Paste the link into the field instead.", "error");
+        }
+    }, [addToast, resetForUrl]);
 
     const startDownload = useCallback(async () => {
         const trimmed = url.trim();
-        if (!trimmed) return;
+        if (!looksLikeMediaUrl(trimmed)) {
+            setError("Paste a valid YouTube or Spotify link first.");
+            return;
+        }
 
         abortRef.current?.abort();
-        const ac = new AbortController();
-        abortRef.current = ac;
-
+        const controller = new AbortController();
+        abortRef.current = controller;
         setStatus("downloading");
         setError(null);
         setDownloadedName(null);
-        setProgress(6);
-        setStage("Starting…");
+        setProgress(5);
+        setStage("Finding the best stream");
 
-        let fake = 6;
-        const tick = setInterval(() => {
-            fake = Math.min(86, fake + Math.max(0.35, (88 - fake) * 0.035));
-            setProgress(Math.round(fake));
-            if (fake < 25) setStage("Connecting…");
-            else if (fake < 55) setStage("Downloading…");
-            else if (fake < 80) setStage("Packaging…");
-            else setStage("Almost done…");
-        }, 350);
+        let downloadTicker: ReturnType<typeof setInterval> | undefined;
 
         try {
-            const res = await fetch("/api/download", {
+            const response = await fetch("/api/download", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    url: trimmed,
-                    format,
-                    quality: isVideo ? quality : "best",
-                }),
-                signal: ac.signal,
+                body: JSON.stringify({ url: trimmed, format, quality: isVideo ? quality : "best" }),
+                signal: controller.signal,
             });
+            const plan = await readApiJson<DownloadPlan & { error?: string }>(response);
+            if (!response.ok) throw new Error(plan.error || "The download could not be prepared.");
 
-            clearInterval(tick);
+            setProgress(14);
+            setStage("Downloading securely");
+            let simulated = 14;
+            downloadTicker = window.setInterval(() => {
+                simulated = Math.min(62, simulated + Math.max(0.4, (64 - simulated) * 0.045));
+                setProgress(Math.round(simulated));
+            }, 350);
 
-            const ctype = res.headers.get("Content-Type") || "";
-            if (!res.ok || ctype.includes("application/json")) {
-                const data = await readApiJson(res);
-                throw new Error(String(data.error || `Download failed (${res.status})`));
+            const sourceResponse = await fetch(plan.url, { signal: controller.signal });
+            if (!sourceResponse.ok) {
+                throw new Error(`The media host refused the download (${sourceResponse.status}). Try again.`);
+            }
+            const sourceBlob = await sourceResponse.blob();
+            if (sourceBlob.size < 1024) throw new Error("The media host returned an empty file. Try again.");
+
+            window.clearInterval(downloadTicker);
+            downloadTicker = undefined;
+            let resultBlob = sourceBlob;
+
+            if (plan.needsConversion) {
+                setProgress(64);
+                setStage(`Converting to ${plan.outputExt.toUpperCase()} on your device`);
+                const { convertMedia } = await import("@/lib/ffmpeg-helper");
+                const sourceFile = new File([sourceBlob], `source.${plan.inputExt}`, {
+                    type: sourceBlob.type || "application/octet-stream",
+                });
+                resultBlob = await convertMedia(sourceFile, plan.inputExt, plan.outputExt, {
+                    audioBitrate: plan.outputExt === "mp3" ? "192k" : undefined,
+                    onProgress: (value, nextStage) => {
+                        setProgress(Math.min(97, 64 + Math.round(value * 0.33)));
+                        setStage(nextStage ? `${nextStage.replace(/…/g, "")} on your device` : "Converting on your device");
+                    },
+                });
             }
 
-            setProgress(94);
-            setStage("Saving…");
-
-            const blob = await res.blob();
-            if (blob.size < 500) {
-                throw new Error("Download returned an empty file. Try another link or format.");
-            }
-
-            const disposition = res.headers.get("Content-Disposition") || "";
-            const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-            const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
-            const fileName = utfMatch
-                ? decodeURIComponent(utfMatch[1])
-                : plainMatch
-                    ? plainMatch[1]
-                    : `convertly.${format}`;
-
-            const objectUrl = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = objectUrl;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(objectUrl);
-
+            setProgress(98);
+            setStage("Saving file");
+            saveBlob(resultBlob, plan.fileName);
             setProgress(100);
-            setStage("Complete");
+            setStage("Download complete");
             setStatus("done");
-            setDownloadedName(fileName);
-            addToast(`Downloaded ${fileName}`, "success");
-        } catch (err) {
-            clearInterval(tick);
-            if ((err as Error).name === "AbortError") return;
-            const msg = err instanceof Error ? err.message : "Download failed";
-            setError(msg);
+            setDownloadedName(plan.fileName);
+            addToast(`Downloaded ${plan.fileName}`, "success");
+        } catch (caught) {
+            if (downloadTicker) window.clearInterval(downloadTicker);
+            if ((caught as Error).name === "AbortError") return;
+            const message = caught instanceof Error ? caught.message : "Download failed.";
+            setError(message);
             setStatus("error");
             setProgress(0);
             setStage("");
-            addToast(msg, "error");
+            addToast(message, "error");
         }
     }, [url, format, quality, isVideo, addToast]);
 
-    const busy = status === "fetching" || status === "downloading";
-
     return (
-        <div className={`${styles.page} section`}>
+        <main className={`${styles.page} section`}>
             <div className="container">
-                <div className="section-header">
-                    <p className="section-label">Media Downloader</p>
-                    <h1 className="section-title">
-                        YouTube &amp; Spotify{" "}
-                        <span className="gradient-text">to MP3 / MP4</span>
-                    </h1>
-                    <p className="section-desc">
-                        Paste a link — preview loads automatically. Pick format &amp; quality, then download.
-                    </p>
-                </div>
+                <header className={styles.hero}>
+                    <div className={styles.eyebrow}><Sparkles size={14} /> Media downloader</div>
+                    <h1>Save media. <span className="gradient-text">Skip the friction.</span></h1>
+                    <p>Paste a YouTube video or Spotify track. Convertly finds the media, prepares your format, and saves it straight to your device.</p>
+                    <div className={styles.platforms}>
+                        <span><Youtube size={16} /> YouTube</span>
+                        <span><Headphones size={16} /> Spotify tracks</span>
+                        <span><ShieldCheck size={16} /> No account</span>
+                    </div>
+                </header>
 
-                <div className={styles.layout}>
-                    {preview && (
-                        <div className={styles.previewBar}>
-                            {preview.thumbnail ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={preview.thumbnail} alt="" className={styles.previewThumb} />
-                            ) : (
-                                <div className={styles.previewThumbFallback}>
-                                    {preview.source === "spotify" ? <Headphones size={20} /> : <Youtube size={20} />}
-                                </div>
-                            )}
-                            <div className={styles.previewMeta}>
-                                <div className={styles.previewTitle}>{preview.title}</div>
-                                <div className={styles.previewSub}>
-                                    {preview.source === "spotify" ? "Spotify" : "YouTube"}
-                                    {preview.artist ? ` · ${preview.artist}` : ""}
-                                    {preview.duration ? ` · ${formatDuration(preview.duration)}` : ""}
-                                </div>
-                            </div>
-                            <a
-                                href={preview.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={styles.previewLink}
-                                title="Open original"
-                            >
-                                <ExternalLink size={16} />
-                            </a>
+                <div className={styles.workspace}>
+                    <section className={styles.card}>
+                        <div className={styles.stepHeader}>
+                            <span className={styles.stepNumber}>1</span>
+                            <div><h2>Paste your link</h2><p>Preview loads automatically</p></div>
+                            {status === "fetching" && <span className={styles.statusBusy}><Loader2 size={13} className="spinning" /> Checking</span>}
+                            {status === "ready" && preview && <span className={styles.statusReady}><Check size={13} /> Ready</span>}
                         </div>
-                    )}
 
-                    <div className={styles.card}>
-                        <label className={styles.label}>
-                            <Link2 size={15} />
-                            Link
-                            {status === "fetching" && (
-                                <span className={styles.statusFetching}>
-                                    <Loader2 size={12} className="spinning" /> Fetching
-                                </span>
-                            )}
-                            {status === "ready" && preview && (
-                                <span className={styles.statusReady}>
-                                    <CheckCircle size={12} /> Ready
-                                </span>
-                            )}
-                        </label>
-                        <input
-                            className={styles.input}
-                            type="url"
-                            placeholder="https://youtube.com/watch?v=… or open.spotify.com/track/…"
-                            value={url}
-                            onChange={e => {
-                                const next = e.target.value;
-                                setUrl(next);
-                                if (lastFetchedUrl.current && lastFetchedUrl.current !== next.trim()) {
-                                    lastFetchedUrl.current = "";
-                                    setPreview(null);
-                                    setError(null);
-                                    setDownloadedName(null);
-                                    setStatus("idle");
-                                    setProgress(0);
-                                }
-                            }}
-                            disabled={status === "downloading"}
-                            spellCheck={false}
-                            autoFocus
-                        />
+                        <div className={styles.urlField}>
+                            <Link2 size={19} />
+                            <input
+                                type="url"
+                                placeholder="Paste a YouTube or Spotify link"
+                                value={url}
+                                onChange={event => resetForUrl(event.target.value)}
+                                onKeyDown={event => {
+                                    if (event.key === "Enter") void fetchInfo(url, true);
+                                }}
+                                disabled={status === "downloading"}
+                                spellCheck={false}
+                                aria-label="YouTube or Spotify link"
+                                autoFocus
+                            />
+                            <button type="button" onClick={() => void pasteLink()} disabled={status === "downloading"}>
+                                <ClipboardPaste size={16} /> <span>Paste</span>
+                            </button>
+                        </div>
 
-                        <label className={styles.label}>
-                            {isVideo ? <Video size={15} /> : <Music size={15} />}
-                            Format
-                        </label>
-                        <div className={styles.chipRow}>
-                            {availableFormats.map(f => (
-                                <button
-                                    key={f.value}
-                                    type="button"
-                                    className={`${styles.chip} ${format === f.value ? styles.chipOn : ""}`}
-                                    onClick={() => setFormat(f.value)}
-                                    disabled={busy}
-                                >
-                                    {f.label}
-                                </button>
-                            ))}
+                        {preview && (
+                            <div className={styles.preview}>
+                                <div className={styles.previewImageWrap}>
+                                    {preview.thumbnail ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={preview.thumbnail} alt="" className={styles.previewImage} />
+                                    ) : (
+                                        <div className={styles.previewFallback}>{preview.source === "spotify" ? <Headphones /> : <Youtube />}</div>
+                                    )}
+                                    <span className={styles.sourceBadge}>{preview.source === "spotify" ? "Spotify" : "YouTube"}</span>
+                                </div>
+                                <div className={styles.previewCopy}>
+                                    <h3>{preview.title}</h3>
+                                    <p>
+                                        {preview.artist || "Unknown creator"}
+                                        {preview.duration ? <><span>•</span>{formatDuration(preview.duration)}</> : null}
+                                    </p>
+                                </div>
+                                <a href={preview.url} target="_blank" rel="noopener noreferrer" title="Open original">
+                                    <ExternalLink size={17} />
+                                </a>
+                            </div>
+                        )}
+
+                        <div className={styles.divider} />
+
+                        <div className={styles.stepHeader}>
+                            <span className={styles.stepNumber}>2</span>
+                            <div><h2>Choose a format</h2><p>Pick what works for you</p></div>
+                        </div>
+
+                        <div className={styles.formatGrid}>
+                            {availableFormats.map(option => {
+                                const Icon = option.kind === "audio" ? FileAudio : FileVideo;
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        className={format === option.value ? styles.formatActive : ""}
+                                        onClick={() => setFormat(option.value)}
+                                        disabled={busy}
+                                    >
+                                        <Icon size={20} />
+                                        <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                                        <i>{format === option.value && <Check size={13} />}</i>
+                                    </button>
+                                );
+                            })}
                         </div>
 
                         {isVideo && !isSpotify && (
-                            <>
-                                <label className={styles.label}>
-                                    <MonitorPlay size={15} />
-                                    Quality
-                                </label>
-                                <div className={styles.chipRow}>
-                                    {QUALITY_OPTIONS.map(q => (
+                            <div className={styles.qualityBlock}>
+                                <div className={styles.qualityLabel}><MonitorPlay size={16} /><span>Video quality</span></div>
+                                <div className={styles.qualityRow}>
+                                    {QUALITY_OPTIONS.map(option => (
                                         <button
-                                            key={q.value}
+                                            key={option.value}
                                             type="button"
-                                            className={`${styles.chip} ${quality === q.value ? styles.chipOn : ""}`}
-                                            onClick={() => setQuality(q.value)}
+                                            className={quality === option.value ? styles.qualityActive : ""}
+                                            onClick={() => setQuality(option.value)}
                                             disabled={busy}
                                         >
-                                            {q.label}
+                                            <strong>{option.label}</strong><small>{option.detail}</small>
                                         </button>
                                     ))}
-                                </div>
-                            </>
-                        )}
-
-                        <button
-                            type="button"
-                            className={`btn btn-primary ${styles.downloadBtn}`}
-                            onClick={() => void startDownload()}
-                            disabled={busy || !url.trim()}
-                        >
-                            {status === "downloading" ? (
-                                <><Loader2 size={18} className="spinning" /> Downloading…</>
-                            ) : status === "done" ? (
-                                <><CheckCircle size={18} /> Download again</>
-                            ) : (
-                                <>
-                                    <Download size={18} />
-                                    Download {format.toUpperCase()}
-                                    {isVideo ? (quality === "best" ? " · Best" : ` · ${quality}p`) : ""}
-                                </>
-                            )}
-                        </button>
-
-                        {(status === "downloading" || status === "done") && (
-                            <div className={styles.progressBlock}>
-                                <div className={styles.progressMeta}>
-                                    <span>{stage || (status === "done" ? "Complete" : "Working…")}</span>
-                                    <span>{progress}%</span>
-                                </div>
-                                <div className={styles.progressTrack}>
-                                    <div
-                                        className={`${styles.progressFill} ${status === "done" ? styles.progressDone : ""}`}
-                                        style={{ width: `${progress}%` }}
-                                    />
                                 </div>
                             </div>
                         )}
 
                         {error && (
-                            <div className={styles.alertError}>
-                                <AlertTriangle size={16} />
-                                <span>{error}</span>
+                            <div className={styles.alertError} role="alert">
+                                <AlertTriangle size={18} />
+                                <div><strong>Couldn&apos;t prepare that media</strong><span>{error}</span></div>
+                                {looksLikeMediaUrl(url) && status !== "downloading" && (
+                                    <button type="button" onClick={() => void fetchInfo(url, true)}>Retry</button>
+                                )}
+                            </div>
+                        )}
+
+                        <button
+                            type="button"
+                            className={`btn btn-primary ${styles.downloadButton}`}
+                            onClick={() => void startDownload()}
+                            disabled={busy || !looksLikeMediaUrl(url)}
+                        >
+                            {status === "downloading" ? <Loader2 size={19} className="spinning" /> : status === "done" ? <CheckCircle size={19} /> : <Download size={19} />}
+                            {status === "downloading" ? stage || "Preparing download" : status === "done" ? "Download again" : `Download ${format.toUpperCase()}`}
+                            {!busy && isVideo && <span>{quality === "best" ? "Best" : `${quality}p`}</span>}
+                        </button>
+
+                        {(status === "downloading" || status === "done") && (
+                            <div className={styles.progressBlock} aria-live="polite">
+                                <div><span>{stage}</span><strong>{progress}%</strong></div>
+                                <div className={styles.progressTrack}><i style={{ width: `${progress}%` }} /></div>
                             </div>
                         )}
 
                         {downloadedName && status === "done" && (
-                            <div className={styles.alertOk}>
-                                <CheckCircle size={16} />
-                                <span>Saved <strong>{downloadedName}</strong></span>
-                            </div>
+                            <div className={styles.alertSuccess}><CheckCircle size={17} /><span>Saved <strong>{downloadedName}</strong></span></div>
                         )}
-                    </div>
+                    </section>
+
+                    <aside className={styles.sidePanel}>
+                        <div className={styles.sideGlow} />
+                        <div className={styles.sideIcon}><Zap size={24} /></div>
+                        <h2>Built for Vercel.<br />Processed on your device.</h2>
+                        <p>Downloads no longer rely on YouTube cookies or a blocked Vercel server IP. Media is resolved through a federated network, then any conversion happens privately in your browser.</p>
+                        <ul>
+                            <li><CheckCircle size={15} /><span><strong>No cookie maintenance</strong><small>Nothing to refresh or rotate</small></span></li>
+                            <li><CheckCircle size={15} /><span><strong>Real format conversion</strong><small>MP3 and WAV are actually encoded</small></span></li>
+                            <li><CheckCircle size={15} /><span><strong>Automatic failover</strong><small>Unhealthy media hosts are skipped</small></span></li>
+                        </ul>
+                        <div className={styles.localNote}><ShieldCheck size={16} /> Use public media you have permission to save.</div>
+                    </aside>
+                </div>
+
+                <div className={styles.footnotes}>
+                    <span><Zap size={15} /> Direct media transfer</span>
+                    <span><ShieldCheck size={15} /> Local conversion</span>
+                    <span><Music size={15} /> Spotify metadata matching</span>
+                    <span><Video size={15} /> Up to 720p combined video</span>
                 </div>
             </div>
-        </div>
+        </main>
     );
 }
